@@ -11,7 +11,7 @@ esac
 if [[ "${reload_enabled}" == "true" ]]; then
   export WATCHFILES_FORCE_POLLING="${WATCHFILES_FORCE_POLLING:-true}"
   echo "VAD dev reload: watching /app/backend/*.py (polling=${WATCHFILES_FORCE_POLLING})"
-  exec uvicorn main:app \
+  exec uvicorn vad_service:app \
     --host "${VAD_HOST:-0.0.0.0}" \
     --port "${VAD_PORT:-8080}" \
     --reload \
@@ -21,4 +21,4 @@ if [[ "${reload_enabled}" == "true" ]]; then
     --log-level info
 fi
 
-exec python main.py
+exec python vad_service.py

@@ -312,7 +312,7 @@ docker compose up --build
 
 # Local (no Docker; requires GPU + PyTorch)
 cd backend
-VAD_PORT=14020 VAD_RELOAD=true python main.py
+VAD_PORT=14020 VAD_RELOAD=true python vad_service.py
 ```
 
 When reload is active, container logs show `VAD dev reload: watching /app/backend/*.py`, then `WatchFiles detected changes` on save.

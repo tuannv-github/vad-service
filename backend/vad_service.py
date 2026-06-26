@@ -240,7 +240,7 @@ def main():
     if VAD_RELOAD:
         logger.info("Dev reload enabled — watching %s for .py changes", backend_dir)
     uvicorn.run(
-        "main:app",
+        "vad_service:app",
         host=VAD_HOST,
         port=VAD_PORT,
         reload=VAD_RELOAD,
