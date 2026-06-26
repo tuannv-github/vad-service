@@ -4,15 +4,7 @@ Standalone Silero VAD microservice for continuous voice-activity detection. Stre
 
 **Repository:** [github.com/tuannv-github/vad-service](https://github.com/tuannv-github/vad-service)
 
-In the [vlaa](https://github.com/tuannv-github/vlaa) monorepo this directory is a **git submodule** (`webui/vad-service`). After cloning vlaa:
-
-```bash
-git submodule update --init webui/vad-service
-```
-
 ## Quick start
-
-**Standalone clone:**
 
 ```bash
 git clone https://github.com/tuannv-github/vad-service.git
@@ -21,23 +13,13 @@ cp .env.example .env          # optional
 docker compose up -d --build
 ```
 
-**From vlaa submodule path:**
-
-```bash
-cd webui/vad-service
-cp .env.example .env          # optional
-docker compose up -d --build
-```
-
 - **GUI:** http://localhost:8766
 - **Health:** `curl http://localhost:8766/health`
-
-When started via the parent `webui/docker-compose.yaml`, the `vad` service runs automatically and the webui gateway uses `http://vad:8080` internally.
 
 ## Architecture
 
 ```
-Client (browser / HTTP gateway)
+Client (browser or HTTP client)
     │  PCM chunks (16 kHz int16)
     ▼
 Socket.IO  audio_stream  ──or──  REST POST /v1/sessions/{id}/audio
@@ -66,7 +48,7 @@ Audio is processed in **streaming mode**:
 
 1. Incoming PCM is appended to the session buffer (for whole-record playback).
 2. Audio is split into **512-sample frames** (32 ms @ 16 kHz) and fed to Silero's **`VADIterator`**, which keeps LSTM state between frames (O(1) per window, no full-buffer re-scan).
-3. On Silero `start`, the service emits **`voice_activity_start`** (and legacy **`speech_started`** for webui compatibility).
+3. On Silero `start`, the service emits **`voice_activity_start`** (and legacy **`speech_started`**).
 4. While speech continues, each chunk emits **`speech_ongoing`** with updated `speech_ms`.
 5. When Silero detects **`min_silence_ms`** of trailing silence, it emits `end` → the service finalizes the utterance with **`voice_activity_stop`**, stores recordings, then returns to **`buffering`**.
 
@@ -76,7 +58,7 @@ Audio is processed in **streaming mode**:
 
 2. voice_activity_start
       Silero finds speech. Payload: offset_ms, speech_ms, optional since_stop_ms.
-      Also emits speech_started (webui compatibility).
+      Also emits speech_started (legacy alias).
 
 3. speech_ongoing
       Chunks keep arriving while speech is active.
@@ -230,7 +212,7 @@ Path: `/socket.io` on the same host/port.
 | `buffering` | Listening, no speech yet (or between utterances) |
 | `voice_activity_start` | Speech begins (`offset_ms`, `speech_ms`, optional `since_stop_ms`, `utterance_seq`) |
 | `voice_activity_stop` | Utterance complete — `min_silence_ms` reached; recordings + `audio_b64` |
-| `speech_started` | Legacy alias (webui gateway) |
+| `speech_started` | Legacy alias for `voice_activity_start` |
 | `speech_ongoing` | Audio streaming while utterance is active |
 | `idle` | After `reset_state` |
 
@@ -298,17 +280,6 @@ Copy `.env.example` → `.env`. GUI and `PUT /api/config` write to `VAD_SETTINGS
 
 The Parameters tab documents each Silero field. Use **Reset** on a row to restore one field from env defaults, or **Reset defaults** for all.
 
-## Integration with WebUI
-
-The vlaa webui gateway (`webui/backend/vad_client.py`) forwards audio over HTTP:
-
-```
-VAD_SERVICE_URL=http://vad:8080        # docker compose
-VAD_SERVICE_URL=http://127.0.0.1:8766  # local
-```
-
-On `voice_activity_stop`, the gateway receives `audio_b64` (VAD clip) and forwards it to vLLM. Socket events are relayed to the browser as `vad_status`.
-
 ## Development
 
 `docker-compose.yaml` bind-mounts `./backend`, `./frontend`, and `./data`. **Frontend** changes only need a browser refresh; **backend** `.py` changes need reload enabled.
@@ -335,12 +306,6 @@ From `backend/`:
 python test_double_utterance.py
 python test_pipeline_reset.py
 python test_timeline_trim.py
-```
-
-From vlaa `webui/backend/` (HTTP client against a running service):
-
-```bash
-python test_double_vad.py http://127.0.0.1:8766
 ```
 
 ## Docker notes
