@@ -13,8 +13,8 @@ cp .env.example .env          # optional
 docker compose up -d --build
 ```
 
-- **GUI:** http://localhost:8766
-- **Health:** `curl http://localhost:8766/health`
+- **GUI (client):** http://localhost:14120
+- **API (backend):** `curl http://localhost:14020/health`
 
 ## Architecture
 
@@ -83,7 +83,7 @@ Public Socket.IO / REST events are **`voice_activity_start`** and **`voice_activ
 
 ## Web GUI
 
-Open http://localhost:8766 (or `VAD_PUBLIC_PORT`).
+Open http://localhost:14120 (or `VAD_CLIENT_PORT`).
 
 | Tab | Purpose |
 |-----|---------|
@@ -94,7 +94,7 @@ Open http://localhost:8766 (or `VAD_PUBLIC_PORT`).
 
 ## REST API
 
-Base URL: `http://localhost:8766` (container internal port `8080`).
+Base URL: `http://localhost:14020` (backend) or `http://localhost:14120` (client) — container internal port `8080`.
 
 ### Health & config
 
@@ -109,7 +109,7 @@ Base URL: `http://localhost:8766` (container internal port `8080`).
 **Example — change threshold and silence gap:**
 
 ```bash
-curl -X PUT http://localhost:8766/api/config \
+curl -X PUT http://localhost:14020/api/config \
   -H 'Content-Type: application/json' \
   -d '{"threshold": 0.5, "min_silence_ms": 150}'
 ```
@@ -117,7 +117,7 @@ curl -X PUT http://localhost:8766/api/config \
 **Reset to defaults file:**
 
 ```bash
-curl -X POST http://localhost:8766/api/config/reset
+curl -X POST http://localhost:14020/api/config/reset
 ```
 
 ### Session audio (HTTP alternative to Socket.IO)
@@ -165,7 +165,7 @@ Response:
 **List example:**
 
 ```bash
-curl http://localhost:8766/v1/sessions/my-client/recordings
+curl http://localhost:14020/v1/sessions/my-client/recordings
 ```
 
 ```json
@@ -242,7 +242,7 @@ Path: `/socket.io` on the same host/port.
 **Minimal JS client:**
 
 ```javascript
-const socket = io("http://localhost:8766", { path: "/socket.io" });
+const socket = io("http://localhost:14120", { path: "/socket.io" });
 
 socket.on("connect", () => console.log("sid", socket.id));
 
@@ -287,7 +287,8 @@ On startup, defaults load from `vad_defaults.json`, then `vad_settings.json` is 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VAD_DEVICE` | `cuda` | `cuda`, `cuda:0`, or `cpu` |
-| `VAD_PUBLIC_PORT` | `8766` | Host port (compose) |
+| `VAD_BACKEND_PORT` | `14020` | Host port for API / backend clients |
+| `VAD_CLIENT_PORT` | `14120` | Host port for browser GUI / Socket.IO clients |
 | `VAD_SAVE_SPEECH` | `false` | Also write VAD clips to disk (`VAD_SAVE_DIR`) |
 | `VAD_RELOAD` | `false` | Auto-restart on `backend/*.py` changes (Docker entrypoint) |
 | `VAD_RELOAD_DELAY` | `0.5` | Debounce before uvicorn reload (seconds) |
@@ -311,7 +312,7 @@ docker compose up --build
 
 # Local (no Docker; requires GPU + PyTorch)
 cd backend
-VAD_PORT=8766 VAD_RELOAD=true python main.py
+VAD_PORT=14020 VAD_RELOAD=true python main.py
 ```
 
 When reload is active, container logs show `VAD dev reload: watching /app/backend/*.py`, then `WatchFiles detected changes` on save.

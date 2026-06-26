@@ -12,7 +12,8 @@ services:
     shm_size: ${SHM_SIZE:-8gb}
     gpus: all
     ports:
-      - "${VAD_PUBLIC_PORT:-8766}:8080"
+      - "${VAD_BACKEND_PORT:-14020}:8080"
+      - "${VAD_CLIENT_PORT:-14120}:8080"
     env_file:
       - path: .env
         required: false
