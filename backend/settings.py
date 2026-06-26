@@ -1,4 +1,4 @@
-"""Runtime-mutable Silero VAD parameters (env defaults + JSON persistence)."""
+"""Runtime-mutable Silero VAD parameters (JSON defaults + JSON persistence)."""
 
 from __future__ import annotations
 
@@ -10,6 +10,12 @@ from pathlib import Path
 from typing import Any
 
 SETTINGS_PATH = Path(os.environ.get("VAD_SETTINGS_PATH", "/app/data/vad_settings.json"))
+DEFAULTS_PATH = Path(
+    os.environ.get(
+        "VAD_DEFAULTS_PATH",
+        str(Path(__file__).resolve().parent.parent / "config" / "vad_defaults.json"),
+    )
+)
 
 
 @dataclass
@@ -17,22 +23,26 @@ class VadSettings:
     threshold: float = 0.8
     min_speech_ms: int = 250
     min_silence_ms: int = 1000
-    speech_pad_ms: int = 30
+    speech_pad_ms: int = 100
     neg_threshold: float | None = None
     max_speech_duration_s: float | None = None
 
     @classmethod
-    def from_env(cls) -> VadSettings:
-        neg = os.environ.get("VAD_NEG_THRESHOLD")
-        max_speech = os.environ.get("VAD_MAX_SPEECH_DURATION_S")
-        return cls(
-            threshold=float(os.environ.get("VAD_THRESHOLD", "0.8")),
-            min_speech_ms=int(os.environ.get("VAD_MIN_SPEECH_MS", "250")),
-            min_silence_ms=int(os.environ.get("VAD_MIN_SILENCE_MS", "1000")),
-            speech_pad_ms=int(os.environ.get("VAD_SPEECH_PAD_MS", "30")),
-            neg_threshold=float(neg) if neg not in (None, "") else None,
-            max_speech_duration_s=float(max_speech) if max_speech not in (None, "") else None,
-        )
+    def baseline(cls) -> VadSettings:
+        """Built-in fallback when defaults file is missing or invalid."""
+        return cls()
+
+    @classmethod
+    def from_defaults_file(cls) -> VadSettings:
+        if not DEFAULTS_PATH.is_file():
+            return cls.baseline()
+        try:
+            data = json.loads(DEFAULTS_PATH.read_text())
+            settings = cls.baseline()
+            settings.apply_patch(data)
+            return settings
+        except Exception:
+            return cls.baseline()
 
     def to_api(self) -> dict[str, Any]:
         return asdict(self)
@@ -60,7 +70,7 @@ class VadSettings:
 
 
 _lock = threading.Lock()
-_settings = VadSettings.from_env()
+_settings = VadSettings.from_defaults_file()
 
 
 def _load_persisted() -> None:
@@ -76,7 +86,7 @@ def _load_persisted() -> None:
 
 
 def get_default_settings() -> VadSettings:
-    return VadSettings.from_env()
+    return VadSettings.from_defaults_file()
 
 
 def get_settings() -> VadSettings:
@@ -95,10 +105,10 @@ def update_settings(patch: dict[str, Any]) -> tuple[VadSettings, dict[str, str]]
 
 
 def reset_settings() -> VadSettings:
-    """Reset runtime settings from env defaults and overwrite persisted JSON."""
+    """Reset runtime settings from vad_defaults.json and overwrite persisted JSON."""
     global _settings
     with _lock:
-        _settings = VadSettings.from_env()
+        _settings = VadSettings.from_defaults_file()
         SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
         SETTINGS_PATH.write_text(json.dumps(_settings.to_api(), indent=2))
         return VadSettings(**_settings.to_api())

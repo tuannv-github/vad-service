@@ -54,7 +54,7 @@ async def main() -> int:
         if st == "voice_activity_start":
             starts.append(data.get("utterance_seq", -1))
             print(f"  START seq={data.get('utterance_seq')}")
-        elif st == "voice_activity_stop" and data.get("audio_b64"):
+        elif st == "voice_activity_end" and data.get("audio_b64"):
             timeouts.append(data.get("utterance_seq", -1))
             print(f"  TIMEOUT seq={data.get('utterance_seq')}")
         elif st in ("speech_started", "speech_ongoing", "buffering"):

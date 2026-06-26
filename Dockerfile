@@ -30,6 +30,7 @@ PY
 
 COPY backend/ ./backend/
 COPY frontend/ ./frontend/
+COPY config/ ./config/
 COPY scripts/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

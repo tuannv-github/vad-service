@@ -139,7 +139,7 @@ class VadPipeline:
         session.vad_active_ms = speech_dur * 1000.0
         session.speech_active = False
         session.voice_burst_active = False
-        session.last_stop_at = time.perf_counter()
+        session.last_end_at = time.perf_counter()
         result.completion = UtteranceCompletion(
             utterance_seq=session.utterance_seq,
             audio_buffer=bytes(session.audio_buffer),
@@ -208,9 +208,9 @@ class VadPipeline:
             "speech_ms": speech_ms,
             "resumed": resumed,
         }
-        if not resumed and session.last_stop_at is not None:
-            extra["since_stop_ms"] = round(
-                (time.perf_counter() - session.last_stop_at) * 1000
+        if not resumed and session.last_end_at is not None:
+            extra["since_end_ms"] = round(
+                (time.perf_counter() - session.last_end_at) * 1000
             )
         self._emit(result, sid, "voice_activity_start", **extra)
 

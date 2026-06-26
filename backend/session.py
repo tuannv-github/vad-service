@@ -49,7 +49,7 @@ class VadSession:
     recordings: list[UtteranceRecording] = field(default_factory=list)
     stream_vad: StreamVAD | None = None
     stream_timeline_base_sec: float = 0.0
-    last_stop_at: float | None = None
+    last_end_at: float | None = None
     _audio_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     def reset_utterance_cycle(self) -> None:
@@ -76,7 +76,7 @@ class VadSession:
         self.vad_end_wait_ms = None
         self.request_timing = None
         self.inference_running = False
-        self.last_stop_at = None
+        self.last_end_at = None
         self.stream_vad = None
 
     def begin_request_timing(self) -> RequestTiming:

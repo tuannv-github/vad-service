@@ -542,11 +542,11 @@ export function initVadTestPanel() {
       vadDownload.removeAttribute("href");
     }
     if (fullEmpty) {
-      fullEmpty.textContent = "Speak while listening — loads after voice_activity_stop.";
+      fullEmpty.textContent = "Speak while listening — loads after voice_activity_end.";
       fullEmpty.hidden = false;
     }
     if (vadEmpty) {
-      vadEmpty.textContent = "Waiting for voice_activity_stop…";
+      vadEmpty.textContent = "Waiting for voice_activity_end…";
       vadEmpty.hidden = false;
     }
     if (fullMeta) fullMeta.hidden = true;
@@ -563,10 +563,10 @@ export function initVadTestPanel() {
   function formatEventDetail(data) {
     const parts = [];
     if (data.resumed) parts.push("resumed");
-    if (data.since_stop_ms != null) parts.push(`since stop ${data.since_stop_ms} ms`);
+    if (data.since_end_ms != null) parts.push(`since end ${data.since_end_ms} ms`);
     if (data.offset_ms != null) parts.push(`buffer ${data.offset_ms} ms`);
     if (data.speech_ms != null) parts.push(`speech ${Math.round(data.speech_ms)} ms`);
-    if (data.stop_ms != null) parts.push(`stop ${Math.round(data.stop_ms)} ms`);
+    if (data.end_ms != null) parts.push(`end ${Math.round(data.end_ms)} ms`);
     if (data.silence_ms != null) parts.push(`silence ${Math.round(data.silence_ms)} ms`);
     if (data.full_duration_ms != null) parts.push(`whole ${data.full_duration_ms} ms`);
     else if (data.full_duration_sec != null) {
@@ -588,7 +588,7 @@ export function initVadTestPanel() {
       return;
     }
 
-    if (status === "voice_activity_stop") {
+    if (status === "voice_activity_end") {
       logEvent(status, formatEventDetail(data), data.utterance_seq);
       if (data.full_url || data.vad_url || data.full_duration_sec != null) {
         void loadRecordingPlayers(data);

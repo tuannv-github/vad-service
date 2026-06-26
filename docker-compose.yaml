@@ -19,12 +19,6 @@ services:
     environment:
       VAD_HOST: 0.0.0.0
       VAD_PORT: "8080"
-      VAD_THRESHOLD: ${VAD_THRESHOLD:-0.8}
-      VAD_MIN_SPEECH_MS: ${VAD_MIN_SPEECH_MS:-250}
-      VAD_MIN_SILENCE_MS: ${VAD_MIN_SILENCE_MS:-1000}
-      VAD_SPEECH_PAD_MS: ${VAD_SPEECH_PAD_MS:-30}
-      VAD_NEG_THRESHOLD: ${VAD_NEG_THRESHOLD:-}
-      VAD_MAX_SPEECH_DURATION_S: ${VAD_MAX_SPEECH_DURATION_S:-}
       VAD_DEVICE: ${VAD_DEVICE:-cuda}
       VAD_SAVE_SPEECH: ${VAD_SAVE_SPEECH:-false}
       VAD_SAVE_DIR: ${VAD_SAVE_DIR:-logs/vad}
@@ -36,6 +30,7 @@ services:
     volumes:
       - ./backend:/app/backend
       - ./frontend:/app/frontend
+      - ./config:/app/config:ro
       - ./data:/app/data
     restart: unless-stopped
     healthcheck:

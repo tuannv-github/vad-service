@@ -99,7 +99,7 @@ class VadEngine:
         session.segment_end_sec = session.last_voice_activity_sec or session.buffer_duration
         speech_dur = max(0.0, session.segment_end_sec - session.segment_start_sec)
         session.vad_active_ms = speech_dur * 1000.0
-        session.last_stop_at = time.perf_counter()
+        session.last_end_at = time.perf_counter()
         completion = UtteranceCompletion(
             utterance_seq=session.utterance_seq,
             audio_buffer=bytes(session.audio_buffer),
@@ -202,16 +202,16 @@ class VadEngine:
         if VAD_SAVE_SPEECH:
             save_vad_speech_to_file(client_id, vad_pcm, sample_rate, save_dir=VAD_SAVE_DIR)
 
-        stop_ms = round(completion.last_voice_activity_sec * 1000)
+        end_ms = round(completion.last_voice_activity_sec * 1000)
         speech_ms = round(speech_len_sec * 1000)
         silence_ms = round(completion.vad_end_wait_ms) if completion.vad_end_wait_ms else None
 
-        stop_payload = {
-            "status": "voice_activity_stop",
+        end_payload = {
+            "status": "voice_activity_end",
             "utterance_seq": utterance_seq,
             "silence_ms": silence_ms,
             "speech_ms": speech_ms,
-            "stop_ms": stop_ms,
+            "end_ms": end_ms,
             "full_duration_sec": recording.full_duration_sec,
             "vad_duration_sec": recording.vad_duration_sec,
             "full_duration_ms": round(recording.full_duration_sec * 1000),
@@ -226,9 +226,9 @@ class VadEngine:
 
         return [
             ("request_stats", stats_payload),
-            ("vad_status", stop_payload),
+            ("vad_status", end_payload),
             ("audio_stream_received", {
-                "status": "voice_activity_stop",
+                "status": "voice_activity_end",
                 "session_id": client_id,
                 "utterance_seq": utterance_seq,
                 "full_url": rec_api.get("full_url"),

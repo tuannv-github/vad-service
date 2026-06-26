@@ -45,20 +45,20 @@ async def main() -> int:
     engine = VadEngine()
     sid = "idle"
     session = engine.sessions.get(sid)
-    session.last_stop_at = time.perf_counter()
+    session.last_end_at = time.perf_counter()
     idle_sec = IDLE_CHUNKS * CHUNK_SEC
     plan: list[list[StreamVadEvent]] = [[] for _ in range(IDLE_CHUNKS)]
     plan.append([StreamVadEvent("start", idle_sec)])
     session.stream_vad = ScriptedStream(plans=plan)  # type: ignore[assignment]
 
     offset_ms = 0
-    since_stop_ms = 0
+    since_end_ms = 0
 
     async def emit(_cid: str, event: str, data: dict) -> None:
-        nonlocal offset_ms, since_stop_ms
+        nonlocal offset_ms, since_end_ms
         if event == "vad_status" and data.get("status") == "voice_activity_start":
             offset_ms = int(data.get("offset_ms", 0))
-            since_stop_ms = int(data.get("since_stop_ms", 0))
+            since_end_ms = int(data.get("since_end_ms", 0))
 
     for _ in range(IDLE_CHUNKS + 1):
         await engine.process_audio(sid, {"audio": CHUNK, "sample_rate": SR}, emit=emit)
@@ -66,7 +66,7 @@ async def main() -> int:
     expected_ms = round(idle_sec * 1000)
     ok = offset_ms >= 7_500 and abs(offset_ms - expected_ms) < 500
     print(
-        f"offset_ms={offset_ms} since_stop_ms={since_stop_ms} "
+        f"offset_ms={offset_ms} since_end_ms={since_end_ms} "
         f"expected~={expected_ms} -> {'PASS' if ok else 'FAIL'}"
     )
     return 0 if ok else 1

@@ -38,7 +38,7 @@ VadEngine → VadPipeline → StreamVAD (VADIterator, 512 samples / 32 ms)
 | `backend/vad.py` | Silero JIT load + per-session `StreamVAD` / `VADIterator` |
 | `backend/vad_pipeline.py` | Buffer audio, feed stream frames, utterance start/end logic |
 | `backend/engine.py` | REST + Socket.IO handlers, recording storage |
-| `backend/settings.py` | Runtime Silero parameters (env defaults + JSON persistence) |
+| `backend/settings.py` | Runtime Silero parameters (`config/vad_defaults.json` + `data/vad_settings.json`) |
 | `frontend/` | Config GUI + live mic test |
 | `scripts/entrypoint.sh` | Docker entrypoint; uvicorn `--reload` when `VAD_RELOAD=true` |
 
@@ -48,22 +48,24 @@ Audio is processed in **streaming mode**:
 
 1. Incoming PCM is appended to the session buffer (for whole-record playback).
 2. Audio is split into **512-sample frames** (32 ms @ 16 kHz) and fed to Silero's **`VADIterator`**, which keeps LSTM state between frames (O(1) per window, no full-buffer re-scan).
-3. On Silero `start`, the service emits **`voice_activity_start`** (and legacy **`speech_started`**).
+3. When speech is detected, the service emits **`voice_activity_start`** (and legacy **`speech_started`**).
 4. While speech continues, each chunk emits **`speech_ongoing`** with updated `speech_ms`.
-5. When Silero detects **`min_silence_ms`** of trailing silence, it emits `end` → the service finalizes the utterance with **`voice_activity_stop`**, stores recordings, then returns to **`buffering`**.
+5. When **`min_silence_ms`** of trailing silence is reached, the service emits **`voice_activity_end`**, stores recordings, then returns to **`buffering`**.
+
+Public Socket.IO / REST events are **`voice_activity_start`** and **`voice_activity_end`** (plus `speech_ongoing`, `buffering`, etc.), matching Silero's internal `{start}` / `{end}` signals.
 
 ```
 1. buffering
       Client sends PCM chunks. No speech detected yet.
 
 2. voice_activity_start
-      Silero finds speech. Payload: offset_ms, speech_ms, optional since_stop_ms.
+      Silero finds speech. Payload: offset_ms, speech_ms, optional since_end_ms.
       Also emits speech_started (legacy alias).
 
 3. speech_ongoing
       Chunks keep arriving while speech is active.
 
-4. voice_activity_stop
+4. voice_activity_end
       Silero min_silence_ms reached — utterance complete.
       Recordings stored (whole + vad). Payload includes timing fields, audio_b64, REST URLs.
       request_stats emitted with pipeline timing.
@@ -76,8 +78,8 @@ Audio is processed in **streaming mode**:
 
 | Recording | Time range | Use |
 |-----------|------------|-----|
-| **whole** (`…/full`) | Start of utterance buffer → end of buffer at `voice_activity_stop` | Full context including silence before/after speech |
-| **vad** (`…/vad`) | First Silero speech `start` → last Silero speech `end` | Speech clip for downstream ASR/LLM; internal pauses between Silero segments are kept |
+| **whole** (`…/full`) | Start of utterance buffer → end of buffer at `voice_activity_end` | Full context including silence before/after speech |
+| **vad** (`…/vad`) | `voice_activity_start` → `voice_activity_end` (speech segment only) | Speech clip for downstream use; internal pauses within the utterance are kept |
 
 ## Web GUI
 
@@ -85,8 +87,8 @@ Open http://localhost:8766 (or `VAD_PUBLIC_PORT`).
 
 | Tab | Purpose |
 |-----|---------|
-| **Test** | Start/stop mic streaming, waveform, event log; load whole + VAD recordings from REST after `voice_activity_stop` (manual play on `<audio controls>`) |
-| **Parameters** | Live-tune Silero settings; per-field **Reset** or **Reset defaults** (env); persisted to `data/vad_settings.json` |
+| **Test** | Start/stop mic streaming, waveform, event log; load whole + VAD recordings from REST after `voice_activity_end` (manual play on `<audio controls>`) |
+| **Parameters** | Live-tune Silero settings; per-field **Reset** or **Reset defaults** from `config/vad_defaults.json`; active values in `data/vad_settings.json` |
 
 **Microphone over HTTP:** browsers require `localhost`, HTTPS, or Chrome's [insecure origins flag](chrome://flags/#unsafely-treat-insecure-origin-as-secure). The GUI shows a setup modal when mic access is blocked.
 
@@ -99,10 +101,10 @@ Base URL: `http://localhost:8766` (container internal port `8080`).
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/health` | Service status, model loaded, GPU device, current settings |
-| `GET` | `/api/config` | Current VAD parameters (persisted + env) |
-| `GET` | `/api/config/defaults` | Env-based defaults (ignores `vad_settings.json`) |
+| `GET` | `/api/config` | Current VAD parameters (from `vad_settings.json` if present) |
+| `GET` | `/api/config/defaults` | Values from `config/vad_defaults.json` |
 | `PUT` | `/api/config` | Update parameters (JSON body, partial OK). Persists to `vad_settings.json`. Invalidates active VAD streams. |
-| `POST` | `/api/config/reset` | Reset all parameters to env defaults and overwrite persisted JSON |
+| `POST` | `/api/config/reset` | Reset all parameters from `vad_defaults.json` and overwrite `vad_settings.json` |
 
 **Example — change threshold and silence gap:**
 
@@ -112,7 +114,7 @@ curl -X PUT http://localhost:8766/api/config \
   -d '{"threshold": 0.5, "min_silence_ms": 150}'
 ```
 
-**Reset to `.env` defaults:**
+**Reset to defaults file:**
 
 ```bash
 curl -X POST http://localhost:8766/api/config/reset
@@ -202,7 +204,7 @@ Path: `/socket.io` on the same host/port.
 | Event | Description |
 |-------|-------------|
 | `vad_status` | Lifecycle updates (see statuses below) |
-| `request_stats` | Timing breakdown on `voice_activity_stop` |
+| `request_stats` | Timing breakdown on `voice_activity_end` |
 | `audio_stream_received` | Ack per chunk (mirrors status) |
 
 **`vad_status` values:**
@@ -210,17 +212,17 @@ Path: `/socket.io` on the same host/port.
 | Status | Meaning |
 |--------|---------|
 | `buffering` | Listening, no speech yet (or between utterances) |
-| `voice_activity_start` | Speech begins (`offset_ms`, `speech_ms`, optional `since_stop_ms`, `utterance_seq`) |
-| `voice_activity_stop` | Utterance complete — `min_silence_ms` reached; recordings + `audio_b64` |
+| `voice_activity_start` | Speech begins (`offset_ms`, `speech_ms`, optional `since_end_ms`, `utterance_seq`) |
+| `voice_activity_end` | Utterance complete — `min_silence_ms` reached; recordings + `audio_b64` |
 | `speech_started` | Legacy alias for `voice_activity_start` |
 | `speech_ongoing` | Audio streaming while utterance is active |
 | `idle` | After `reset_state` |
 
-**`voice_activity_stop` payload (key fields):**
+**`voice_activity_end` payload (key fields):**
 
 ```json
 {
-  "status": "voice_activity_stop",
+  "status": "voice_activity_end",
   "utterance_seq": 1,
   "full_duration_sec": 4.2,
   "vad_duration_sec": 2.8,
@@ -228,7 +230,7 @@ Path: `/socket.io` on the same host/port.
   "vad_duration_ms": 2800,
   "silence_ms": 124,
   "speech_ms": 2800,
-  "stop_ms": 3100,
+  "end_ms": 3100,
   "full_url": "/v1/sessions/{sid}/recordings/1/full",
   "vad_url": "/v1/sessions/{sid}/recordings/1/vad",
   "audio_b64": "...",
@@ -245,7 +247,7 @@ const socket = io("http://localhost:8766", { path: "/socket.io" });
 socket.on("connect", () => console.log("sid", socket.id));
 
 socket.on("vad_status", (data) => {
-  if (data.status === "voice_activity_stop" && data.full_url) {
+  if (data.status === "voice_activity_end" && data.full_url) {
     document.getElementById("whole").src = data.full_url;
     document.getElementById("vad").src = data.vad_url;
   }
@@ -260,29 +262,45 @@ socket.emit("audio_stream", {
 
 ## Configuration
 
-Copy `.env.example` → `.env`. GUI and `PUT /api/config` write to `VAD_SETTINGS_PATH` (default `/app/data/vad_settings.json`, host path `data/vad_settings.json`). Persisted JSON **overrides env defaults** on restart until reset.
+Two JSON files:
+
+| File | Purpose |
+|------|---------|
+| `config/vad_defaults.json` | Canonical defaults — **Reset** / **Reset defaults** load from here |
+| `data/vad_settings.json` | Active runtime values — written by **Save parameters** (tracked in git) |
+
+On startup, defaults load from `vad_defaults.json`, then `vad_settings.json` is applied if it exists.
+
+**Silero parameters** (in `config/vad_defaults.json`):
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `threshold` | `0.8` | Silero speech probability (0–1) |
+| `min_speech_ms` | `250` | Minimum speech segment length |
+| `min_silence_ms` | `1000` | Trailing silence before `voice_activity_end` |
+| `speech_pad_ms` | `100` | Pad around Silero segments |
+| `neg_threshold` | `null` | Silero exit threshold; empty = `threshold − 0.15` |
+| `max_speech_duration_s` | `null` | Force split after N seconds; empty = unlimited |
+
+**Environment** (`.env` / compose — service runtime, not VAD tuning):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VAD_THRESHOLD` | `0.8` | Silero speech probability (0–1) |
-| `VAD_MIN_SPEECH_MS` | `250` | Minimum speech segment length |
-| `VAD_MIN_SILENCE_MS` | `1000` | Trailing silence before `voice_activity_stop` |
-| `VAD_SPEECH_PAD_MS` | `30` | Pad around Silero segments |
-| `VAD_NEG_THRESHOLD` | *(auto)* | Silero exit threshold; default `threshold − 0.15` |
-| `VAD_MAX_SPEECH_DURATION_S` | *(unlimited)* | Force split after N seconds of continuous speech |
 | `VAD_DEVICE` | `cuda` | `cuda`, `cuda:0`, or `cpu` |
 | `VAD_PUBLIC_PORT` | `8766` | Host port (compose) |
 | `VAD_SAVE_SPEECH` | `false` | Also write VAD clips to disk (`VAD_SAVE_DIR`) |
 | `VAD_RELOAD` | `false` | Auto-restart on `backend/*.py` changes (Docker entrypoint) |
 | `VAD_RELOAD_DELAY` | `0.5` | Debounce before uvicorn reload (seconds) |
 | `WATCHFILES_FORCE_POLLING` | `false` | Set `true` in Docker for bind-mount file events |
+| `VAD_DEFAULTS_PATH` | `config/vad_defaults.json` | Override path to defaults JSON |
+| `VAD_SETTINGS_PATH` | `data/vad_settings.json` | Override path to active settings JSON |
 | `PYTORCH_IMAGE` | `nvcr.io/nvidia/pytorch:25.02-py3` | Docker base image |
 
-The Parameters tab documents each Silero field. Use **Reset** on a row to restore one field from env defaults, or **Reset defaults** for all.
+The Parameters tab documents each Silero field. Edit `config/vad_defaults.json` to change what **Reset** restores.
 
 ## Development
 
-`docker-compose.yaml` bind-mounts `./backend`, `./frontend`, and `./data`. **Frontend** changes only need a browser refresh; **backend** `.py` changes need reload enabled.
+`docker-compose.yaml` bind-mounts `./backend`, `./frontend`, `./config`, and `./data`. **Frontend** changes only need a browser refresh; **backend** `.py` changes need reload enabled.
 
 ```bash
 # Recommended: dev overlay sets VAD_RELOAD + polling
@@ -312,5 +330,6 @@ python test_timeline_trim.py
 
 - Requires **NVIDIA GPU** + [Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
 - Silero JIT model is extracted at image build time to `/app/models/silero_vad.jit`.
-- Host directory `data/` (gitignored) persists GUI tuning in `vad_settings.json`.
+- `data/vad_settings.json` is tracked in git so active tuning is shared; Docker bind-mount still allows live GUI saves.
+- `config/vad_defaults.json` is mounted read-only; edit on the host to change reset defaults.
 - Dev bind mounts: `./backend`, `./frontend` — no image rebuild needed for code edits when reload is on.

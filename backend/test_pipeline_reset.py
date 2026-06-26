@@ -58,7 +58,7 @@ async def main() -> int:
         st = data.get("status")
         if st == "voice_activity_start":
             starts.append(int(data.get("utterance_seq", -1)))
-        elif st == "voice_activity_stop" and data.get("full_duration_sec") is not None:
+        elif st == "voice_activity_end" and data.get("full_duration_sec") is not None:
             completes.append(int(data.get("utterance_seq", -1)))
 
     for utt in range(5):

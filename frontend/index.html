@@ -264,7 +264,7 @@
           <span class="listen-label">Start listening</span>
         </button>
         <p id="mic-error" class="msg err"></p>
-        <p class="hint">Events: <code>voice_activity_start</code> then <code>voice_activity_stop</code> when Silero detects <code>min_silence_ms</code> of trailing silence (utterance complete).</p>
+        <p class="hint">Events: <code>voice_activity_start</code> then <code>voice_activity_end</code> when Silero detects <code>min_silence_ms</code> of trailing silence (utterance complete).</p>
         <canvas id="waveform-canvas" width="800" height="64"></canvas>
       </div>
 
@@ -274,7 +274,7 @@
           <div class="playback-card">
             <h3>Whole record</h3>
             <p class="card-hint">Full capture for the utterance (speech + silence).</p>
-            <p id="full-empty" class="empty">Speak while listening — loads after voice_activity_stop.</p>
+            <p id="full-empty" class="empty">Speak while listening — loads after voice_activity_end.</p>
             <audio id="full-audio" controls preload="auto" hidden></audio>
             <p id="full-meta" class="meta" hidden></p>
             <div class="playback-actions">
@@ -284,7 +284,7 @@
           <div class="playback-card">
             <h3>VAD record</h3>
             <p class="card-hint">Silero speech segment only.</p>
-            <p id="vad-empty" class="empty">Waiting for voice_activity_stop…</p>
+            <p id="vad-empty" class="empty">Waiting for voice_activity_end…</p>
             <audio id="vad-audio" controls preload="auto" hidden></audio>
             <p id="vad-meta" class="meta" hidden></p>
             <div class="playback-actions">
@@ -315,7 +315,7 @@
     <section id="panel-params" class="panel" role="tabpanel">
       <div class="card">
         <h2>Parameters</h2>
-        <p class="hint" style="margin-top:0">Saved to <code>vad-service/data/vad_settings.json</code> on the host. <strong>Reset defaults</strong> restores values from container env (<code>.env</code> / compose).</p>
+        <p class="hint" style="margin-top:0">Active values saved to <code>data/vad_settings.json</code>. <strong>Reset</strong> / <strong>Reset defaults</strong> restore from <code>config/vad_defaults.json</code>.</p>
         <form id="cfg-form">
           <h3 class="param-section">Silero VAD</h3>
           <ul class="param-list">
@@ -354,7 +354,7 @@
                 </span>
               </div>
               <p class="param-desc">
-                Minimum trailing silence in milliseconds before <code>voice_activity_stop</code> (utterance complete).
+                Minimum trailing silence in milliseconds before <code>voice_activity_end</code> (utterance complete).
                 Silero parameter: <code>min_silence_duration_ms</code>. Default: <code>1000</code>.
               </p>
             </li>
@@ -368,7 +368,7 @@
               </div>
               <p class="param-desc">
                 Padding in milliseconds added around each detected speech segment so word onsets and endings are not clipped.
-                Silero parameter: <code>speech_pad_ms</code>. Default: <code>30</code>.
+                Silero parameter: <code>speech_pad_ms</code>. Default: <code>100</code>.
               </p>
             </li>
             <li class="param-item">
@@ -580,7 +580,7 @@
         await loadDefaults();
         await loadConfig();
         await loadHealth();
-        msg.textContent = "Reset all parameters to env defaults.";
+        msg.textContent = "Reset all parameters to defaults file.";
         msg.className = "msg ok";
       } catch (err) {
         msg.textContent = "Reset failed: " + err.message;
