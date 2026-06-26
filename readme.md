@@ -2,7 +2,7 @@
 
 Standalone Silero VAD microservice for continuous voice-activity detection. Streams PCM audio in, runs **Silero `VADIterator`** (32 ms windows, stateful) on each chunk, emits lifecycle events over Socket.IO, and stores two WAV recordings per utterance (whole capture + speech-only clip) retrievable via REST.
 
-**Repository:** [github.com/tuannv-github/vad-service](https://github.com/tuannv-github/vad-service)
+![VAD service web GUI — Test and Parameters tabs](imgs/gui.png)
 
 ## Quick start
 
