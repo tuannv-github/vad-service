@@ -184,9 +184,11 @@ class VADIterator:
         sampling_rate: int = 16000,
         min_silence_duration_ms: int = 100,
         speech_pad_ms: int = 30,
+        neg_threshold: float | None = None,
     ) -> None:
         self.model = model
         self.threshold = threshold
+        self.neg_threshold = neg_threshold
         self.sampling_rate = sampling_rate
         if sampling_rate not in (8000, 16000):
             raise ValueError("VADIterator supports 8000 and 16000 Hz only")
@@ -195,6 +197,7 @@ class VADIterator:
         self.triggered = False
         self.temp_end = 0
         self.current_sample = 0
+        self.last_speech_sample = 0
         self.reset_states()
 
     def reset_states(self) -> None:
@@ -202,6 +205,7 @@ class VADIterator:
         self.triggered = False
         self.temp_end = 0
         self.current_sample = 0
+        self.last_speech_sample = 0
 
     @torch.no_grad()
     def __call__(self, x, return_seconds: bool = False, time_resolution: int = 1):
@@ -210,7 +214,14 @@ class VADIterator:
         window_size_samples = len(x[0]) if x.dim() == 2 else len(x)
         self.current_sample += window_size_samples
         speech_prob = self.model(x, self.sampling_rate).item()
-        neg_threshold = max(self.threshold - 0.15, 0.01)
+        exit_threshold = (
+            self.neg_threshold
+            if self.neg_threshold is not None
+            else max(self.threshold - 0.15, 0.01)
+        )
+
+        if speech_prob >= self.threshold:
+            self.last_speech_sample = self.current_sample
 
         if speech_prob >= self.threshold and self.temp_end:
             self.temp_end = 0
@@ -222,7 +233,7 @@ class VADIterator:
                 return {"start": round(speech_start / self.sampling_rate, time_resolution)}
             return {"start": int(speech_start)}
 
-        if speech_prob < neg_threshold and self.triggered:
+        if speech_prob < exit_threshold and self.triggered:
             if not self.temp_end:
                 self.temp_end = self.current_sample
             if self.current_sample - self.temp_end < self.min_silence_samples:

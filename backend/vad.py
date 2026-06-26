@@ -64,6 +64,7 @@ class StreamVAD:
             sampling_rate=TARGET_SAMPLE_RATE,
             min_silence_duration_ms=self._settings.min_silence_ms,
             speech_pad_ms=self._settings.speech_pad_ms,
+            neg_threshold=self._settings.neg_threshold,
         )
 
     def apply_settings(self, settings: VadSettings) -> None:
@@ -101,8 +102,8 @@ class StreamVAD:
             chunk = audio_float[i * WINDOW_SAMPLES : (i + 1) * WINDOW_SAMPLES]
             tensor = torch.from_numpy(chunk).to(self.device)
             result = self._iterator(tensor, return_seconds=True)
-            if self._iterator.triggered:
-                self.last_voice_sec = self._iterator.current_sample / TARGET_SAMPLE_RATE
+            if self._iterator.last_speech_sample > 0:
+                self.last_voice_sec = self._iterator.last_speech_sample / TARGET_SAMPLE_RATE
             if result is None:
                 continue
             if "start" in result:

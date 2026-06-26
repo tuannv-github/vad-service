@@ -31,8 +31,6 @@ class ScriptedStream:
             elif ev.kind == "end":
                 self.triggered = False
                 self.last_voice_sec = max(self.last_voice_sec, ev.sec)
-        if not events and self.triggered:
-            self.last_voice_sec += len(audio_bytes) / (sample_rate * 2)
         return events
 
 
