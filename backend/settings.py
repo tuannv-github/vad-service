@@ -20,8 +20,8 @@ DEFAULTS_PATH = Path(
 
 @dataclass
 class VadSettings:
-    threshold: float = 0.8
-    min_speech_ms: int = 250
+    threshold: float = 0.9
+    min_speech_ms: int = 500
     min_silence_ms: int = 1000
     speech_pad_ms: int = 100
     neg_threshold: float | None = None
