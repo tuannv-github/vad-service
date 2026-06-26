@@ -1,0 +1,46 @@
+services:
+  vad:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        PYTORCH_IMAGE: ${PYTORCH_IMAGE:-nvcr.io/nvidia/pytorch:25.02-py3}
+    image: gemma4-vad:local
+    container_name: ${VAD_CONTAINER_NAME:-gemma4-vad}
+    runtime: nvidia
+    ipc: host
+    shm_size: ${SHM_SIZE:-8gb}
+    gpus: all
+    ports:
+      - "${VAD_PUBLIC_PORT:-8766}:8080"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      VAD_HOST: 0.0.0.0
+      VAD_PORT: "8080"
+      VAD_THRESHOLD: ${VAD_THRESHOLD:-0.8}
+      VAD_MIN_SPEECH_MS: ${VAD_MIN_SPEECH_MS:-250}
+      VAD_MIN_SILENCE_MS: ${VAD_MIN_SILENCE_MS:-1000}
+      VAD_SPEECH_PAD_MS: ${VAD_SPEECH_PAD_MS:-30}
+      VAD_NEG_THRESHOLD: ${VAD_NEG_THRESHOLD:-}
+      VAD_MAX_SPEECH_DURATION_S: ${VAD_MAX_SPEECH_DURATION_S:-}
+      VAD_DEVICE: ${VAD_DEVICE:-cuda}
+      VAD_SAVE_SPEECH: ${VAD_SAVE_SPEECH:-false}
+      VAD_SAVE_DIR: ${VAD_SAVE_DIR:-logs/vad}
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      VAD_RELOAD: ${VAD_RELOAD:-false}
+      VAD_RELOAD_DELAY: ${VAD_RELOAD_DELAY:-0.5}
+      WATCHFILES_FORCE_POLLING: ${WATCHFILES_FORCE_POLLING:-false}
+    volumes:
+      - ./backend:/app/backend
+      - ./frontend:/app/frontend
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s

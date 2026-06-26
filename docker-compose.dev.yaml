@@ -1,0 +1,7 @@
+# Dev overlay — use via ./dev.sh (auto-reload on backend/*.py changes).
+services:
+  vad:
+    environment:
+      VAD_RELOAD: "true"
+      VAD_RELOAD_DELAY: "0.5"
+      WATCHFILES_FORCE_POLLING: "true"

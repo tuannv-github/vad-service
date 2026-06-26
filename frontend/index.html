@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VAD Service</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f1117;
+      color: #e8eaed;
+      line-height: 1.5;
+    }
+    .wrap { max-width: 1280px; margin: 0 auto; padding: 24px 24px 48px; }
+    h1 { margin: 0 0 8px; font-size: 1.5rem; }
+    h2 { margin: 0 0 16px; font-size: 1rem; }
+    .sub { color: #8b949e; margin: 0 0 20px; font-size: 0.95rem; }
+    .status { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+    .pill { font-size: 0.75rem; padding: 4px 10px; border-radius: 999px; }
+    .pill.ok { background: #23863633; color: #3fb950; }
+    .pill.bad { background: #da363333; color: #f85149; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid #30363d; padding-bottom: 0; }
+    .tab {
+      padding: 10px 16px;
+      border: none;
+      background: none;
+      color: #8b949e;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+    .tab.active { color: #e8eaed; border-bottom-color: #58a6ff; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .card {
+      padding: 20px;
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      margin-bottom: 16px;
+    }
+    form { display: grid; gap: 14px; }
+    label { display: grid; gap: 4px; font-size: 0.875rem; }
+    label span { color: #8b949e; font-size: 0.8rem; }
+    input[type="number"], input[type="text"] {
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid #30363d;
+      background: #0f1117;
+      color: #e8eaed;
+      font-size: 0.95rem;
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
+    .actions { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+    button {
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .primary { background: #238636; color: #fff; }
+    .secondary { background: #21262d; color: #e8eaed; border: 1px solid #30363d; }
+    .msg { margin-top: 12px; font-size: 0.875rem; }
+    .msg.ok { color: #3fb950; }
+    .msg.err { color: #f85149; }
+    a { color: #58a6ff; }
+    .record-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 20px;
+      border: 2px solid #30363d;
+      border-radius: 12px;
+      background: #21262d;
+      color: #e8eaed;
+      font-size: 1.05rem;
+      user-select: none;
+      touch-action: none;
+    }
+    .record-btn.active {
+      border-color: #f85149;
+      background: #3d1218;
+      box-shadow: 0 0 24px rgba(248, 81, 73, 0.25);
+    }
+    .record-icon {
+      width: 14px; height: 14px; border-radius: 50%; background: #f85149; flex-shrink: 0;
+    }
+    .record-btn.active .record-icon { animation: pulse 0.9s ease-in-out infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.15); }
+    }
+    .hint { margin: 12px 0 0; color: #8b949e; font-size: 0.875rem; }
+    .playback-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+    .playback-card {
+      padding: 14px;
+      background: #0f1117;
+      border: 1px solid #21262d;
+      border-radius: 10px;
+    }
+    .playback-card h3 { margin: 0 0 6px; font-size: 0.9rem; }
+    .card-hint { margin: 0 0 10px; font-size: 0.78rem; color: #8b949e; }
+    .playback-card audio { width: 100%; margin-bottom: 8px; }
+    .playback-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+    .download-link {
+      font-size: 0.8rem; color: #58a6ff; text-decoration: none;
+      padding: 6px 10px; border: 1px solid #30363d; border-radius: 6px;
+      background: #21262d;
+    }
+    .download-link:hover { text-decoration: underline; }
+    .download-link[hidden] { display: none; }
+    .empty { margin: 0; color: #8b949e; font-size: 0.85rem; }
+    .meta { margin: 8px 0 0; font-size: 0.8rem; color: #8b949e; }
+    .status-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .status-badge {
+      font-size: 0.8rem; padding: 4px 10px; border-radius: 6px;
+      background: #1f6feb33; color: #58a6ff; font-family: ui-monospace, monospace;
+    }
+    #waveform-canvas {
+      width: 100%; height: 64px; display: block;
+      border-radius: 8px; border: 1px solid #21262d; margin-top: 12px;
+    }
+    .event-log {
+      list-style: none; margin: 0; padding: 0;
+      max-height: 320px; overflow-y: auto; font-size: 0.85rem;
+    }
+    .event-log-header,
+    .event-log li {
+      display: grid;
+      grid-template-columns: 7.75rem 2.25rem 10rem 1fr;
+      gap: 10px;
+      padding: 8px 0;
+      align-items: baseline;
+    }
+    .event-log-header {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid #30363d;
+      padding-bottom: 6px;
+      margin-bottom: 2px;
+    }
+    .event-log li {
+      border-bottom: 1px solid #21262d;
+    }
+    .event-log time { color: #8b949e; }
+    .event-log .event-id {
+      font-family: ui-monospace, monospace;
+      color: #8b949e;
+      text-align: right;
+    }
+    .event-log li.empty-row {
+      display: block;
+      grid-column: 1 / -1;
+    }
+    .footer { margin-top: 24px; font-size: 0.85rem; color: #8b949e; }
+    .mic-overlay {
+      position: fixed; inset: 0; z-index: 1000;
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px; background: rgba(0, 0, 0, 0.72); backdrop-filter: blur(4px);
+    }
+    .mic-overlay[hidden] { display: none; }
+    .mic-card {
+      width: 100%; max-width: 420px; padding: 24px;
+      border-radius: 12px; background: #161b22;
+      border: 1px solid #30363d; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+    }
+    .mic-card h2 { margin: 0 0 12px; font-size: 1.25rem; }
+    .mic-card p { margin: 0 0 12px; color: #c9d1d9; line-height: 1.5; font-size: 0.95rem; }
+    .mic-warn { color: #d29922; }
+    .mic-steps { margin: 0 0 12px; padding-left: 1.25rem; color: #c9d1d9; line-height: 1.5; font-size: 0.9rem; }
+    .mic-steps li { margin-bottom: 8px; }
+    .copy-row { display: flex; gap: 8px; margin-top: 6px; }
+    .copy-input {
+      flex: 1; min-width: 0; padding: 6px 8px;
+      border: 1px solid #30363d; border-radius: 6px;
+      background: #0f1117; color: #c9d1d9;
+      font-family: ui-monospace, monospace; font-size: 0.8rem;
+    }
+    .copy-btn {
+      flex-shrink: 0; padding: 6px 10px;
+      border: 1px solid #30363d; border-radius: 6px;
+      background: #21262d; color: #c9d1d9; font-size: 0.8rem; cursor: pointer;
+    }
+    .mic-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+    .mic-allow {
+      padding: 12px 16px; border: none; border-radius: 10px;
+      background: #238636; color: #fff; font-weight: 600; font-size: 1rem; cursor: pointer;
+    }
+    .mic-allow:disabled { opacity: 0.55; cursor: not-allowed; }
+    .mic-later {
+      padding: 10px; border: none; border-radius: 8px;
+      background: transparent; color: #8b949e; cursor: pointer;
+    }
+    .param-list { list-style: none; margin: 0; padding: 0; }
+    .param-item {
+      padding: 18px 0;
+      border-bottom: 1px solid #21262d;
+    }
+    .param-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .param-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+    .param-name {
+      font-family: ui-monospace, monospace;
+      font-weight: 600;
+      color: #58a6ff;
+      font-size: 0.95rem;
+    }
+    .param-input { width: 140px; flex-shrink: 0; }
+    .param-controls { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .param-reset-btn {
+      padding: 8px 10px;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      background: #21262d;
+      color: #8b949e;
+      font-size: 0.8rem;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .param-reset-btn:hover { color: #e8eaed; border-color: #484f58; }
+    .param-desc { margin: 0; color: #8b949e; font-size: 0.875rem; line-height: 1.55; }
+    .param-desc code { color: #c9d1d9; font-size: 0.82rem; }
+    .param-section { margin: 24px 0 0; font-size: 0.95rem; color: #e8eaed; }
+    .param-section:first-child { margin-top: 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>VAD service</h1>
+    <p class="sub">Continuous Silero VAD — stream audio, detect speech, end after <code>min_silence_ms</code> silence.</p>
+    <div class="status">
+      <span id="health-pill" class="pill bad">Checking…</span>
+      <span id="device-pill" class="pill">—</span>
+      <span id="socket-pill" class="pill bad">Socket disconnected</span>
+    </div>
+
+    <div class="tabs" role="tablist">
+      <button type="button" class="tab active" data-tab="test" role="tab">Test</button>
+      <button type="button" class="tab" data-tab="params" role="tab">Parameters</button>
+    </div>
+
+    <section id="panel-test" class="panel active" role="tabpanel">
+      <div class="card">
+        <h2>Live VAD test</h2>
+        <button type="button" id="listen-btn" class="record-btn">
+          <span class="record-icon"></span>
+          <span class="listen-label">Start listening</span>
+        </button>
+        <p id="mic-error" class="msg err"></p>
+        <p class="hint">Events: <code>voice_activity_start</code> then <code>voice_activity_stop</code> when Silero detects <code>min_silence_ms</code> of trailing silence (utterance complete).</p>
+        <canvas id="waveform-canvas" width="800" height="64"></canvas>
+      </div>
+
+      <div class="card">
+        <h2>Playback</h2>
+        <div class="playback-row">
+          <div class="playback-card">
+            <h3>Whole record</h3>
+            <p class="card-hint">Full capture for the utterance (speech + silence).</p>
+            <p id="full-empty" class="empty">Speak while listening — loads after voice_activity_stop.</p>
+            <audio id="full-audio" controls preload="auto" hidden></audio>
+            <p id="full-meta" class="meta" hidden></p>
+            <div class="playback-actions">
+              <a id="full-download" class="download-link" href="#" download hidden>Download whole WAV</a>
+            </div>
+          </div>
+          <div class="playback-card">
+            <h3>VAD record</h3>
+            <p class="card-hint">Silero speech segment only.</p>
+            <p id="vad-empty" class="empty">Waiting for voice_activity_stop…</p>
+            <audio id="vad-audio" controls preload="auto" hidden></audio>
+            <p id="vad-meta" class="meta" hidden></p>
+            <div class="playback-actions">
+              <a id="vad-download" class="download-link" href="#" download hidden>Download VAD WAV</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="status-header">
+          <h2 style="margin:0;flex:1">VAD events</h2>
+          <span id="vad-status-badge" class="status-badge">idle</span>
+          <button type="button" class="secondary" id="reset-vad-btn">Reset VAD</button>
+        </div>
+        <div class="event-log-header" aria-hidden="true">
+          <span>Time</span>
+          <span>ID</span>
+          <span>Event</span>
+          <span>Detail</span>
+        </div>
+        <ul id="event-log" class="event-log">
+          <li class="empty-row empty">Events appear while listening.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="panel-params" class="panel" role="tabpanel">
+      <div class="card">
+        <h2>Parameters</h2>
+        <p class="hint" style="margin-top:0">Saved to <code>vad-service/data/vad_settings.json</code> on the host. <strong>Reset defaults</strong> restores values from container env (<code>.env</code> / compose).</p>
+        <form id="cfg-form">
+          <h3 class="param-section">Silero VAD</h3>
+          <ul class="param-list">
+            <li class="param-item">
+              <div class="param-head">
+                <span class="param-name">threshold</span>
+                <span class="param-controls">
+                  <input class="param-input" name="threshold" type="number" step="0.01" min="0" max="1" value="0.8" required />
+                  <button type="button" class="param-reset-btn" data-field="threshold" title="Reset to default">Reset</button>
+                </span>
+              </div>
+              <p class="param-desc">
+                Speech probability threshold (0–1). Silero scores each 512-sample window; windows at or above this value are treated as speech.
+                Higher values reduce false positives but may miss quiet speech. Silero library default: <code>0.5</code>; this service default: <code>0.8</code>.
+              </p>
+            </li>
+            <li class="param-item">
+              <div class="param-head">
+                <span class="param-name">min_speech_ms</span>
+                <span class="param-controls">
+                  <input class="param-input" name="min_speech_ms" type="number" step="10" min="50" required />
+                  <button type="button" class="param-reset-btn" data-field="min_speech_ms" title="Reset to default">Reset</button>
+                </span>
+              </div>
+              <p class="param-desc">
+                Minimum speech segment length in milliseconds. Shorter detections are discarded as noise or clicks.
+                Silero parameter: <code>min_speech_duration_ms</code>. Default: <code>250</code>.
+              </p>
+            </li>
+            <li class="param-item">
+              <div class="param-head">
+                <span class="param-name">min_silence_ms</span>
+                <span class="param-controls">
+                  <input class="param-input" name="min_silence_ms" type="number" step="10" min="50" value="1000" required />
+                  <button type="button" class="param-reset-btn" data-field="min_silence_ms" title="Reset to default">Reset</button>
+                </span>
+              </div>
+              <p class="param-desc">
+                Minimum trailing silence in milliseconds before <code>voice_activity_stop</code> (utterance complete).
+                Silero parameter: <code>min_silence_duration_ms</code>. Default: <code>1000</code>.
+              </p>
+            </li>
+            <li class="param-item">
+              <div class="param-head">
+                <span class="param-name">speech_pad_ms</span>
+                <span class="param-controls">
+                  <input class="param-input" name="speech_pad_ms" type="number" step="10" min="0" required />
+                  <button type="button" class="param-reset-btn" data-field="speech_pad_ms" title="Reset to default">Reset</button>
+                </span>
+              </div>
+              <p class="param-desc">
+                Padding in milliseconds added around each detected speech segment so word onsets and endings are not clipped.
+                Silero parameter: <code>speech_pad_ms</code>. Default: <code>30</code>.
+              </p>
+            </li>
+            <li class="param-item">
+              <div class="param-head">
+                <span class="param-name">neg_threshold</span>
+                <span class="param-controls">
+                  <input class="param-input" name="neg_threshold" type="number" step="0.01" min="0" max="1" placeholder="auto" />
+                  <button type="button" class="param-reset-btn" data-field="neg_threshold" title="Reset to default">Reset</button>
+                </span>
+              </div>
+              <p class="param-desc">
+                Exit threshold for ending speech. When probability drops below this value, Silero looks for silence to close the segment.
+                Leave empty to use Silero’s default: <code>threshold − 0.15</code> (minimum <code>0.01</code>).
+              </p>
+            </li>
+            <li class="param-item">
+              <div class="param-head">
+                <span class="param-name">max_speech_duration_s</span>
+                <span class="param-controls">
+                  <input class="param-input" name="max_speech_duration_s" type="number" step="1" min="1" placeholder="unlimited" />
+                  <button type="button" class="param-reset-btn" data-field="max_speech_duration_s" title="Reset to default">Reset</button>
+                </span>
+              </div>
+              <p class="param-desc">
+                Maximum continuous speech duration in seconds before Silero forces a segment split (useful for very long monologues).
+                Leave empty for no limit. Silero parameter: <code>max_speech_duration_s</code>.
+              </p>
+            </li>
+          </ul>
+          <div class="actions">
+            <button type="submit" class="primary">Save parameters</button>
+            <button type="button" class="secondary" id="reload-btn">Reload</button>
+            <button type="button" class="secondary" id="reset-defaults-btn">Reset defaults</button>
+          </div>
+          <p id="msg" class="msg"></p>
+        </form>
+      </div>
+    </section>
+
+    <p class="footer">
+      API: <a href="/health">/health</a> · <a href="/api/config">/api/config</a> ·
+      <code>GET /v1/sessions/{id}/recordings</code> ·
+      <code>GET …/recordings/{seq}/full</code> · <code>GET …/vad</code>
+    </p>
+  </div>
+
+  <div id="mic-prompt" class="mic-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="mic-prompt-title">
+    <div class="mic-card">
+      <h2 id="mic-prompt-title">Allow microphone access</h2>
+      <p>This page uses your microphone for live Silero VAD testing. Your browser will ask you to allow access.</p>
+      <p id="mic-insecure-warn" class="mic-warn" hidden>
+        Microphone access requires HTTPS or <strong>localhost</strong>. For this host over HTTP
+        (<code id="page-origin"></code>), enable Chrome’s insecure-origin flag:
+      </p>
+      <ol id="mic-insecure-steps" class="mic-steps" hidden>
+        <li>
+          Open
+          <a href="chrome://flags/#unsafely-treat-insecure-origin-as-secure" target="_blank" rel="noopener noreferrer">
+            Insecure origins treated as secure
+          </a>
+          or paste:
+          <span class="copy-row">
+            <input id="flag-input" class="copy-input" type="text" readonly value="chrome://flags/#unsafely-treat-insecure-origin-as-secure" />
+            <button type="button" class="copy-btn" data-copy-target="flag-input">Copy</button>
+          </span>
+        </li>
+        <li>
+          Add this origin to the flag list:
+          <span class="copy-row">
+            <input id="origin-input" class="copy-input" type="text" readonly />
+            <button type="button" class="copy-btn" data-copy-target="origin-input">Copy</button>
+          </span>
+        </li>
+        <li>Relaunch Chrome, then reload this page.</li>
+      </ol>
+      <p id="mic-prompt-error" class="msg err" hidden></p>
+      <div class="mic-actions">
+        <button type="button" id="mic-allow-btn" class="mic-allow">Allow microphone</button>
+        <button type="button" id="mic-dismiss-btn" class="mic-later">Not now</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+    const form = document.getElementById("cfg-form");
+    const msg = document.getElementById("msg");
+    const healthPill = document.getElementById("health-pill");
+    const devicePill = document.getElementById("device-pill");
+
+    document.querySelectorAll(".tab").forEach((tab) => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+        document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+        tab.classList.add("active");
+        document.getElementById("panel-" + tab.dataset.tab).classList.add("active");
+      });
+    });
+
+    async function loadHealth() {
+      try {
+        const r = await fetch("/health");
+        const h = await r.json();
+        healthPill.textContent = h.vad_loaded ? "VAD loaded" : "VAD not loaded";
+        healthPill.className = "pill " + (h.vad_loaded ? "ok" : "bad");
+        devicePill.textContent = h.vad_device || "no device";
+        devicePill.className = "pill ok";
+      } catch {
+        healthPill.textContent = "Offline";
+        healthPill.className = "pill bad";
+      }
+    }
+
+    let configDefaults = {};
+
+    async function loadDefaults() {
+      const r = await fetch("/api/config/defaults");
+      configDefaults = await r.json();
+    }
+
+    function formatDefaultValue(field, value) {
+      if (value == null) return field.includes("threshold") ? "auto" : "unlimited";
+      return String(value);
+    }
+
+    async function resetConfigField(field) {
+      if (!(field in configDefaults)) return;
+      const def = configDefaults[field];
+      const input = form.elements[field];
+      if (!input) return;
+      input.value = def == null ? "" : def;
+      const body = { [field]: def };
+      const r = await fetch("/api/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(JSON.stringify(data.detail || data));
+      msg.textContent = `Reset ${field} to default (${formatDefaultValue(field, def)}).`;
+      msg.className = "msg ok";
+      await loadHealth();
+    }
+
+    async function loadConfig() {
+      const r = await fetch("/api/config");
+      const cfg = await r.json();
+      for (const el of form.elements) {
+        if (!el.name) continue;
+        const val = cfg[el.name];
+        if (val == null) el.value = "";
+        else el.value = val;
+      }
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      msg.textContent = "";
+      const body = {};
+      for (const el of form.elements) {
+        if (!el.name) continue;
+        if (el.value === "") {
+          body[el.name] = null;
+        } else {
+          const n = Number(el.value);
+          body[el.name] = !isNaN(n) ? n : el.value;
+        }
+      }
+      try {
+        const r = await fetch("/api/config", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(JSON.stringify(data.detail || data));
+        msg.textContent = "Saved — switch to Test tab and try again.";
+        msg.className = "msg ok";
+        await loadHealth();
+      } catch (err) {
+        msg.textContent = "Save failed: " + err.message;
+        msg.className = "msg err";
+      }
+    });
+
+    document.querySelectorAll(".param-reset-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        void resetConfigField(btn.dataset.field).catch((err) => {
+          msg.textContent = "Reset failed: " + err.message;
+          msg.className = "msg err";
+        });
+      });
+    });
+
+    document.getElementById("reload-btn").addEventListener("click", async () => {
+      await loadDefaults();
+      await loadConfig();
+      await loadHealth();
+      msg.textContent = "Reloaded.";
+      msg.className = "msg ok";
+    });
+
+    document.getElementById("reset-defaults-btn").addEventListener("click", async () => {
+      msg.textContent = "";
+      try {
+        const r = await fetch("/api/config/reset", { method: "POST" });
+        const data = await r.json();
+        if (!r.ok) throw new Error(JSON.stringify(data.detail || data));
+        await loadDefaults();
+        await loadConfig();
+        await loadHealth();
+        msg.textContent = "Reset all parameters to env defaults.";
+        msg.className = "msg ok";
+      } catch (err) {
+        msg.textContent = "Reset failed: " + err.message;
+        msg.className = "msg err";
+      }
+    });
+
+    void loadDefaults().then(() => loadConfig());
+    loadHealth();
+    setInterval(loadHealth, 15000);
+  </script>
+  <script type="module">
+    import { initVadTestPanel } from "/vad-test.js";
+    initVadTestPanel();
+  </script>
+</body>
+</html>
