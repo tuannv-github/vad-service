@@ -191,6 +191,18 @@ function pcmBytesToBase64(pcmBytes) {
   return btoa(bin);
 }
 
+function autoplayWhenReady(audioEl) {
+  if (!audioEl) return;
+  const play = () => {
+    void audioEl.play().catch(() => {});
+  };
+  if (audioEl.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+    play();
+  } else {
+    audioEl.addEventListener("canplaythrough", play, { once: true });
+  }
+}
+
 export function initVadTestPanel() {
   const socketPill = document.getElementById("socket-pill");
   const vadStatusBadge = document.getElementById("vad-status-badge");
@@ -490,6 +502,7 @@ export function initVadTestPanel() {
         vadAudio.src = vadBlobUrl;
         vadAudio.hidden = false;
         vadAudio.load();
+        autoplayWhenReady(vadAudio);
       }
       if (vadEmpty) vadEmpty.hidden = true;
       if (vadMeta) {

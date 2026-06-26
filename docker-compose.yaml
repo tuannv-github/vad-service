@@ -5,8 +5,8 @@ services:
       dockerfile: Dockerfile
       args:
         PYTORCH_IMAGE: ${PYTORCH_IMAGE:-nvcr.io/nvidia/pytorch:25.02-py3}
-    image: gemma4-vad:local
-    container_name: ${VAD_CONTAINER_NAME:-gemma4-vad}
+    image: vad-service:local
+    container_name: ${VAD_CONTAINER_NAME:-vad-service}
     runtime: nvidia
     ipc: host
     shm_size: ${SHM_SIZE:-8gb}
