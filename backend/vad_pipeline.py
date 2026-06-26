@@ -23,6 +23,56 @@ class VadPipeline:
     def __init__(self, vad: VADProcessor) -> None:
         self.vad = vad
 
+    def min_speech_sec(self, settings: VadSettings | None = None) -> float:
+        cfg = settings or get_settings()
+        return cfg.min_speech_ms / 1000.0
+
+    def _clear_pending_speech(self, session: VadSession) -> None:
+        session.pending_speech_start_sec = None
+
+    def _maybe_confirm_speech_start(
+        self,
+        session: VadSession,
+        result: VadProcessResult,
+        inference_running: bool,
+        cfg: VadSettings,
+    ) -> None:
+        pending = session.pending_speech_start_sec
+        if pending is None or session.speech_active:
+            return
+        stream = session.stream_vad
+        if stream is None or not stream.triggered:
+            self._clear_pending_speech(session)
+            return
+        voice_sec = self._stream_abs_sec(session, stream.last_voice_sec)
+        if (voice_sec - pending) * 1000 < cfg.min_speech_ms:
+            return
+        self._clear_pending_speech(session)
+        self._start_utterance(session, result, inference_running, pending, cfg)
+
+    def _queue_speech_start(self, session: VadSession, start_sec: float) -> None:
+        if session.speech_active:
+            return
+        if session.pending_speech_start_sec is None:
+            session.pending_speech_start_sec = start_sec
+
+    def _handle_stream_end(
+        self,
+        session: VadSession,
+        result: VadProcessResult,
+        end_sec: float,
+        cfg: VadSettings,
+    ) -> None:
+        silence_ms = round(max(0.0, session.buffer_duration - end_sec) * 1000)
+        if session.speech_active:
+            session.last_voice_activity_sec = max(session.last_voice_activity_sec, end_sec)
+            session.segment_end_sec = session.last_voice_activity_sec
+            self._finish_utterance(session, result, silence_after_voice_ms=silence_ms)
+            return
+        if session.pending_speech_start_sec is not None:
+            self._clear_pending_speech(session)
+            self._emit(result, session.client_id, "buffering")
+
     def min_speech_bytes(self, settings: VadSettings | None = None) -> int:
         cfg = settings or get_settings()
         return int(cfg.min_speech_ms / 1000 * TARGET_SAMPLE_RATE * 2)
@@ -73,20 +123,20 @@ class VadPipeline:
         for ev in stream_events:
             if ev.kind == "start":
                 start_sec = self._stream_abs_sec(session, ev.sec)
+                if inference_running:
+                    result.cancel_inference = True
                 if not session.speech_active:
-                    self._start_utterance(session, result, inference_running, start_sec, cfg)
-            elif ev.kind == "end" and session.speech_active:
+                    self._queue_speech_start(session, start_sec)
+            elif ev.kind == "end":
                 end_sec = self._stream_abs_sec(session, ev.sec)
-                silence_ms = round(max(0.0, session.buffer_duration - end_sec) * 1000)
-                session.last_voice_activity_sec = max(session.last_voice_activity_sec, end_sec)
-                session.segment_end_sec = session.last_voice_activity_sec
-                self._finish_utterance(session, result, silence_after_voice_ms=silence_ms)
+                self._handle_stream_end(session, result, end_sec, cfg)
 
         # Iterator can be triggered without a start event (e.g. audio while completing).
         if (
             not session.speech_active
             and session.stream_vad is not None
             and session.stream_vad.triggered
+            and session.pending_speech_start_sec is None
         ):
             pad_sec = WINDOW_SAMPLES / TARGET_SAMPLE_RATE
             rel_voice = session.stream_vad.last_voice_sec
@@ -94,7 +144,9 @@ class VadPipeline:
                 session.stream_timeline_base_sec,
                 self._stream_abs_sec(session, rel_voice) - pad_sec,
             )
-            self._start_utterance(session, result, inference_running, start_sec, cfg)
+            self._queue_speech_start(session, start_sec)
+
+        self._maybe_confirm_speech_start(session, result, inference_running, cfg)
 
         if (
             session.speech_active

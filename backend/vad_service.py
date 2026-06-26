@@ -202,7 +202,9 @@ async def set_inference_running(sid, data):
 
 @sio.event
 async def audio_stream(sid, data):
-    await engine.process_audio(sid, data or {}, emit=_socket_emit)
+    result = await engine.process_audio(sid, data or {}, emit=_socket_emit)
+    if result.get("cancel_inference"):
+        await sio.emit("cancel_inference", {}, to=sid)
 
 
 @sio.event
