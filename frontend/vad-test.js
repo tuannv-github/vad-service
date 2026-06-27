@@ -573,12 +573,13 @@ export function initVadTestPanel() {
   });
   socket.on("disconnect", () => setSocketPill(false));
 
-  function formatEventDetail(data) {
+  function formatStartDetail(data) {
+    if (data.offset_ms == null) return undefined;
+    return `start ${data.offset_ms} ms`;
+  }
+
+  function formatEndDetail(data) {
     const parts = [];
-    if (data.resumed) parts.push("resumed");
-    if (data.since_end_ms != null) parts.push(`since end ${data.since_end_ms} ms`);
-    if (data.offset_ms != null) parts.push(`buffer ${data.offset_ms} ms`);
-    if (data.speech_ms != null) parts.push(`speech ${Math.round(data.speech_ms)} ms`);
     if (data.end_ms != null) parts.push(`end ${Math.round(data.end_ms)} ms`);
     if (data.silence_ms != null) parts.push(`silence ${Math.round(data.silence_ms)} ms`);
     if (data.full_duration_ms != null) parts.push(`whole ${data.full_duration_ms} ms`);
@@ -597,12 +598,12 @@ export function initVadTestPanel() {
     vadStatusBadge.textContent = status;
 
     if (status === "voice_activity_start") {
-      logEvent(status, formatEventDetail(data), data.utterance_seq);
+      logEvent(status, formatStartDetail(data), data.utterance_seq);
       return;
     }
 
     if (status === "voice_activity_end") {
-      logEvent(status, formatEventDetail(data), data.utterance_seq);
+      logEvent(status, formatEndDetail(data), data.utterance_seq);
       if (data.full_url || data.vad_url || data.full_duration_sec != null) {
         void loadRecordingPlayers(data);
       }
@@ -614,7 +615,7 @@ export function initVadTestPanel() {
     }
 
     if (status === "speech_complete") {
-      logEvent(status, formatEventDetail(data), data.utterance_seq);
+      logEvent(status, formatEndDetail(data), data.utterance_seq);
       void loadRecordingPlayers(data);
       return;
     }
@@ -624,7 +625,7 @@ export function initVadTestPanel() {
     }
 
     if (!["buffering", "speech_ongoing"].includes(status)) {
-      logEvent(status, formatEventDetail(data), data.utterance_seq);
+      logEvent(status, undefined, data.utterance_seq);
     }
   });
 
