@@ -186,6 +186,7 @@ class VadEngine:
             vad_pcm=vad_pcm,
         )
         session.recordings.append(recording)
+        session.prune_recordings()
         rec_api = recording.to_api(client_id)
 
         timing = session.request_timing
@@ -216,6 +217,9 @@ class VadEngine:
             "vad_duration_sec": recording.vad_duration_sec,
             "full_duration_ms": round(recording.full_duration_sec * 1000),
             "vad_duration_ms": round(recording.vad_duration_sec * 1000),
+            "recording_to_vad_ms": round(completion.recording_to_vad_ms)
+            if completion.recording_to_vad_ms is not None
+            else None,
             "duration": speech_len_sec,
             "sample_rate": sample_rate,
             **rec_api,

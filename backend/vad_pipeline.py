@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass, field
 
 from audio_utils import extract_pcm_segment
+from config import VAD_MAX_BUFFER_SEC
 from session import UtteranceCompletion, VadSession
 from settings import VadSettings, get_settings
 from vad import TARGET_SAMPLE_RATE, VADProcessor, WINDOW_SAMPLES
@@ -90,6 +91,39 @@ class VadPipeline:
     def _stream_abs_sec(session: VadSession, rel_sec: float) -> float:
         return session.stream_timeline_base_sec + rel_sec
 
+    @staticmethod
+    def _shift_session_timeline(session: VadSession, delta_sec: float) -> None:
+        """Move absolute timeline markers after dropping audio from the buffer head."""
+        if delta_sec <= 0:
+            return
+        session.segment_start_sec = max(0.0, session.segment_start_sec - delta_sec)
+        session.segment_end_sec = max(0.0, session.segment_end_sec - delta_sec)
+        session.last_voice_activity_sec = max(0.0, session.last_voice_activity_sec - delta_sec)
+        session.stream_timeline_base_sec = max(0.0, session.stream_timeline_base_sec - delta_sec)
+        if session.pending_speech_start_sec is not None:
+            pending = session.pending_speech_start_sec - delta_sec
+            session.pending_speech_start_sec = pending if pending > 0 else None
+        if session.recording_to_vad_ms is not None:
+            session.recording_to_vad_ms = max(0.0, session.recording_to_vad_ms - delta_sec * 1000.0)
+
+    def _trim_audio_buffer(
+        self,
+        session: VadSession,
+        sample_rate: int,
+        max_sec: float | None = None,
+    ) -> None:
+        cap = max_sec if max_sec is not None else VAD_MAX_BUFFER_SEC
+        if cap <= 0 or session.buffer_duration <= cap:
+            return
+        excess = session.buffer_duration - cap
+        excess_bytes = int(excess * sample_rate * 2)
+        buf = session.audio_buffer
+        if excess_bytes <= 0 or excess_bytes >= len(buf):
+            return
+        session.audio_buffer = buf[excess_bytes:]
+        session.buffer_duration = cap
+        self._shift_session_timeline(session, excess)
+
     def process_chunk(
         self,
         session: VadSession,
@@ -112,6 +146,7 @@ class VadPipeline:
         chunk_duration = len(audio_bytes) / (sample_rate * 2)
         session.audio_buffer += audio_bytes
         session.buffer_duration += chunk_duration
+        self._trim_audio_buffer(session, sample_rate)
 
         try:
             self._ensure_stream(session, cfg, chunk_duration)
