@@ -29,7 +29,7 @@ class VadPipeline:
         return cfg.min_speech_ms / 1000.0
 
     def _clear_pending_speech(self, session: VadSession) -> None:
-        session.pending_speech_start_sec = None
+        session.pending_speech_start_rel_sec = None
 
     def _maybe_confirm_speech_start(
         self,
@@ -38,24 +38,24 @@ class VadPipeline:
         inference_running: bool,
         cfg: VadSettings,
     ) -> None:
-        pending = session.pending_speech_start_sec
-        if pending is None or session.speech_active:
+        pending_rel = session.pending_speech_start_rel_sec
+        if pending_rel is None or session.speech_active:
             return
         stream = session.stream_vad
         if stream is None or not stream.triggered:
             self._clear_pending_speech(session)
             return
-        voice_sec = self._stream_abs_sec(session, stream.last_voice_sec)
-        if (voice_sec - pending) * 1000 < cfg.min_speech_ms:
+        if (stream.last_voice_sec - pending_rel) * 1000 < cfg.min_speech_ms:
             return
         self._clear_pending_speech(session)
-        self._start_utterance(session, result, inference_running, pending, cfg)
+        start_sec = max(0.0, self._stream_abs_sec(session, pending_rel))
+        self._start_utterance(session, result, inference_running, start_sec, cfg)
 
-    def _queue_speech_start(self, session: VadSession, start_sec: float) -> None:
+    def _queue_speech_start(self, session: VadSession, rel_sec: float) -> None:
         if session.speech_active:
             return
-        if session.pending_speech_start_sec is None:
-            session.pending_speech_start_sec = start_sec
+        if session.pending_speech_start_rel_sec is None:
+            session.pending_speech_start_rel_sec = rel_sec
 
     def _handle_stream_end(
         self,
@@ -70,7 +70,7 @@ class VadPipeline:
             session.segment_end_sec = session.last_voice_activity_sec
             self._finish_utterance(session, result, silence_after_voice_ms=silence_ms)
             return
-        if session.pending_speech_start_sec is not None:
+        if session.pending_speech_start_rel_sec is not None:
             self._clear_pending_speech(session)
             self._emit(result, session.client_id, "buffering")
 
@@ -89,7 +89,8 @@ class VadPipeline:
 
     @staticmethod
     def _stream_abs_sec(session: VadSession, rel_sec: float) -> float:
-        return session.stream_timeline_base_sec + rel_sec
+        # Iterator time includes audio dropped from the buffer head; subtract trimmed duration.
+        return session.stream_timeline_base_sec + rel_sec - session.stream_trimmed_sec
 
     @staticmethod
     def _shift_session_timeline(session: VadSession, delta_sec: float) -> None:
@@ -100,9 +101,6 @@ class VadPipeline:
         session.segment_end_sec = max(0.0, session.segment_end_sec - delta_sec)
         session.last_voice_activity_sec = max(0.0, session.last_voice_activity_sec - delta_sec)
         session.stream_timeline_base_sec = max(0.0, session.stream_timeline_base_sec - delta_sec)
-        if session.pending_speech_start_sec is not None:
-            pending = session.pending_speech_start_sec - delta_sec
-            session.pending_speech_start_sec = pending if pending > 0 else None
         if session.recording_to_vad_ms is not None:
             session.recording_to_vad_ms = max(0.0, session.recording_to_vad_ms - delta_sec * 1000.0)
 
@@ -122,6 +120,7 @@ class VadPipeline:
             return
         session.audio_buffer = buf[excess_bytes:]
         session.buffer_duration = cap
+        session.stream_trimmed_sec += excess
         self._shift_session_timeline(session, excess)
 
     def process_chunk(
@@ -157,11 +156,10 @@ class VadPipeline:
 
         for ev in stream_events:
             if ev.kind == "start":
-                start_sec = self._stream_abs_sec(session, ev.sec)
                 if inference_running:
                     result.cancel_inference = True
                 if not session.speech_active:
-                    self._queue_speech_start(session, start_sec)
+                    self._queue_speech_start(session, ev.sec)
             elif ev.kind == "end":
                 end_sec = self._stream_abs_sec(session, ev.sec)
                 self._handle_stream_end(session, result, end_sec, cfg)
@@ -171,15 +169,12 @@ class VadPipeline:
             not session.speech_active
             and session.stream_vad is not None
             and session.stream_vad.triggered
-            and session.pending_speech_start_sec is None
+            and session.pending_speech_start_rel_sec is None
         ):
             pad_sec = WINDOW_SAMPLES / TARGET_SAMPLE_RATE
             rel_voice = session.stream_vad.last_voice_sec
-            start_sec = max(
-                session.stream_timeline_base_sec,
-                self._stream_abs_sec(session, rel_voice) - pad_sec,
-            )
-            self._queue_speech_start(session, start_sec)
+            rel_start = max(0.0, rel_voice - pad_sec)
+            self._queue_speech_start(session, rel_start)
 
         self._maybe_confirm_speech_start(session, result, inference_running, cfg)
 

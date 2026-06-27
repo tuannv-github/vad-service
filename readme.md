@@ -276,7 +276,7 @@ On startup, defaults load from `vad_defaults.json`, then `vad_settings.json` is 
 | Field | Default | Description |
 |-------|---------|-------------|
 | `threshold` | `0.8` | Silero speech probability (0–1) |
-| `min_speech_ms` | `250` | Minimum speech segment length |
+| `min_speech_ms` | `500` | Minimum speech segment length |
 | `min_silence_ms` | `1000` | Trailing silence before `voice_activity_end` |
 | `speech_pad_ms` | `100` | Pad around Silero segments |
 | `neg_threshold` | `null` | Silero exit threshold; empty = `threshold − 0.15` |

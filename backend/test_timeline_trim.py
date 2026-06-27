@@ -3,22 +3,28 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+os.environ["VAD_SETTINGS_PATH"] = os.path.join(tempfile.gettempdir(), "vad_test_settings.json")
 
 from engine import VadEngine
 from settings import update_settings
 from vad import StreamVadEvent
 
-CHUNK = b"\x00\x01" * 256  # 32 ms @ 16 kHz
+CHUNK = b"\x00\x01" * 256  # 16 ms @ 16 kHz
 SR = 16000
 CHUNK_SEC = len(CHUNK) / (SR * 2)
-IDLE_CHUNKS = 500  # ~16 s silence
+IDLE_CHUNKS = 500  # ~8 s silence (under default buffer cap — no head trim)
+SPEECH_CHUNKS = 10
 
 
 @dataclass
 class ScriptedStream:
     plans: list[list[StreamVadEvent]]
+    voice_chunks: set[int] = field(default_factory=set)
     call: int = 0
     triggered: bool = False
     last_voice_sec: float = 0.0
@@ -34,6 +40,8 @@ class ScriptedStream:
             elif ev.kind == "end":
                 self.triggered = False
                 self.last_voice_sec = max(self.last_voice_sec, ev.sec)
+        if not events and self.triggered and idx in self.voice_chunks:
+            self.last_voice_sec += len(audio_bytes) / (sample_rate * 2)
         return events
 
 
@@ -46,10 +54,16 @@ async def main() -> int:
     session.last_end_at = time.perf_counter()
     idle_sec = IDLE_CHUNKS * CHUNK_SEC
     plan: list[list[StreamVadEvent]] = [[] for _ in range(IDLE_CHUNKS)]
+    voice_chunks: set[int] = set()
+    start_idx = IDLE_CHUNKS
     plan.append([StreamVadEvent("start", idle_sec)])
-    session.stream_vad = ScriptedStream(plans=plan)  # type: ignore[assignment]
+    voice_chunks.add(start_idx)
+    for i in range(1, SPEECH_CHUNKS):
+        plan.append([])
+        voice_chunks.add(start_idx + i)
+    session.stream_vad = ScriptedStream(plans=plan, voice_chunks=voice_chunks)  # type: ignore[assignment]
 
-    offset_ms = 0
+    offset_ms = -1
     since_end_ms = 0
 
     async def emit(_cid: str, event: str, data: dict) -> None:
@@ -58,7 +72,7 @@ async def main() -> int:
             offset_ms = int(data.get("offset_ms", 0))
             since_end_ms = int(data.get("since_end_ms", 0))
 
-    for _ in range(IDLE_CHUNKS + 1):
+    for _ in range(len(plan)):
         await engine.process_audio(sid, {"audio": CHUNK, "sample_rate": SR}, emit=emit)
 
     expected_ms = round(idle_sec * 1000)

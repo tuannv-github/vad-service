@@ -50,7 +50,8 @@ class VadSession:
     recordings: list[UtteranceRecording] = field(default_factory=list)
     stream_vad: StreamVAD | None = None
     stream_timeline_base_sec: float = 0.0
-    pending_speech_start_sec: float | None = None
+    stream_trimmed_sec: float = 0.0
+    pending_speech_start_rel_sec: float | None = None
     last_end_at: float | None = None
     _audio_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
@@ -64,8 +65,9 @@ class VadSession:
         self.last_voice_activity_sec = 0.0
         self.speech_end_at = None
         self.voice_burst_active = False
-        self.pending_speech_start_sec = None
+        self.pending_speech_start_rel_sec = None
         self.stream_timeline_base_sec = 0.0
+        self.stream_trimmed_sec = 0.0
         # Drop iterator so the next chunk gets a fresh VADIterator (avoids stale triggered state).
         self.stream_vad = None
 

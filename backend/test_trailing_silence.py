@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import tempfile
 from dataclasses import dataclass, field
+
+os.environ["VAD_SETTINGS_PATH"] = os.path.join(tempfile.gettempdir(), "vad_test_settings.json")
 
 from engine import VadEngine
 from settings import update_settings

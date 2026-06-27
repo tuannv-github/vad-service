@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import os
 import random
 import struct
 import sys
+import tempfile
+
+os.environ["VAD_SETTINGS_PATH"] = os.path.join(tempfile.gettempdir(), "vad_test_settings.json")
 
 from engine import VadEngine
 from settings import update_settings
