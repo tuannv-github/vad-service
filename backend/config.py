@@ -12,8 +12,6 @@ VAD_RELOAD_DELAY = float(os.environ.get("VAD_RELOAD_DELAY", "0.5"))
 VAD_DEVICE = os.environ.get("VAD_DEVICE", "cuda")
 VAD_SAVE_SPEECH = os.environ.get("VAD_SAVE_SPEECH", "false").lower() in ("1", "true", "yes")
 VAD_SAVE_DIR = os.environ.get("VAD_SAVE_DIR", "logs/vad")
-VAD_MAX_BUFFER_SEC = float(os.environ.get("VAD_MAX_BUFFER_SEC", "60"))
-VAD_MAX_RECORDINGS_SEC = float(os.environ.get("VAD_MAX_RECORDINGS_SEC", "60"))
 CORS_ORIGINS = [
     o.strip()
     for o in os.environ.get("CORS_ORIGINS", "*").split(",")

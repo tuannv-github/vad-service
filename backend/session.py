@@ -6,7 +6,6 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from config import VAD_MAX_RECORDINGS_SEC
 from recordings import UtteranceRecording
 from request_stats import RequestTiming, new_request_timing
 
@@ -50,7 +49,6 @@ class VadSession:
     recordings: list[UtteranceRecording] = field(default_factory=list)
     stream_vad: StreamVAD | None = None
     stream_timeline_base_sec: float = 0.0
-    stream_trimmed_sec: float = 0.0
     pending_speech_start_rel_sec: float | None = None
     last_end_at: float | None = None
     _audio_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
@@ -67,7 +65,6 @@ class VadSession:
         self.voice_burst_active = False
         self.pending_speech_start_rel_sec = None
         self.stream_timeline_base_sec = 0.0
-        self.stream_trimmed_sec = 0.0
         # Drop iterator so the next chunk gets a fresh VADIterator (avoids stale triggered state).
         self.stream_vad = None
 
@@ -96,22 +93,6 @@ class VadSession:
 
     def latest_recording(self) -> UtteranceRecording | None:
         return self.recordings[-1] if self.recordings else None
-
-    def prune_recordings(self, max_sec: float | None = None) -> None:
-        """Drop oldest stored utterances once total full-audio duration exceeds max_sec."""
-        cap = max_sec if max_sec is not None else VAD_MAX_RECORDINGS_SEC
-        if cap <= 0 or not self.recordings:
-            return
-        total = 0.0
-        keep_from = len(self.recordings)
-        for idx in range(len(self.recordings) - 1, -1, -1):
-            total += self.recordings[idx].full_duration_sec
-            if total > cap:
-                keep_from = idx + 1
-                break
-            keep_from = idx
-        if keep_from > 0:
-            del self.recordings[:keep_from]
 
 
 class SessionManager:

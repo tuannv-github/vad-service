@@ -1,4 +1,4 @@
-"""Long idle between utterances must not reset buffer offset (no idle trim)."""
+"""Long idle between utterances must not reset buffer offset."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from vad import StreamVadEvent
 CHUNK = b"\x00\x01" * 256  # 16 ms @ 16 kHz
 SR = 16000
 CHUNK_SEC = len(CHUNK) / (SR * 2)
-IDLE_CHUNKS = 500  # ~8 s silence (under default buffer cap — no head trim)
+IDLE_CHUNKS = 500  # ~8 s silence
 SPEECH_CHUNKS = 10
 
 

@@ -186,7 +186,6 @@ class VadEngine:
             vad_pcm=vad_pcm,
         )
         session.recordings.append(recording)
-        session.prune_recordings()
         rec_api = recording.to_api(client_id)
 
         timing = session.request_timing

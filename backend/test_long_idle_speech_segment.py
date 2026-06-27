@@ -1,4 +1,4 @@
-"""After long idle, utterances must still complete with correct buffer offset."""
+"""Long idle + speech: end must not precede start; clip must cover speech."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ from vad import StreamVadEvent
 CHUNK = b"\x00\x01" * 256  # 16 ms @ 16 kHz
 SR = 16000
 CHUNK_SEC = len(CHUNK) / (SR * 2)
-IDLE_CHUNKS = 500  # ~8 s silence
-SPEECH_CHUNKS = 10
+IDLE_CHUNKS = 500
+SPEECH_CHUNKS = 40  # 640 ms voiced
 
 
 @dataclass
@@ -63,33 +63,42 @@ async def main() -> int:
     update_settings({"min_speech_ms": 100, "min_silence_ms": 100})
 
     engine = VadEngine()
-    sid = "long-idle"
+    sid = "segment"
     session = engine.sessions.get(sid)
-
     plan, voice_chunks = speech_plan(IDLE_CHUNKS)
     session.stream_vad = ScriptedStream(plans=plan, voice_chunks=voice_chunks)  # type: ignore[assignment]
 
-    offset_ms = -1
-    completed = False
+    start_payload: dict = {}
+    end_payload: dict = {}
 
     async def emit(_cid: str, event: str, data: dict) -> None:
-        nonlocal offset_ms, completed
         if event != "vad_status":
             return
         st = data.get("status")
         if st == "voice_activity_start":
-            offset_ms = int(data.get("offset_ms", -1))
+            start_payload.update(data)
         elif st == "voice_activity_end" and data.get("vad_duration_ms") is not None:
-            completed = True
+            end_payload.update(data)
 
     for _ in range(len(plan)):
         await engine.process_audio(sid, {"audio": CHUNK, "sample_rate": SR}, emit=emit)
 
-    expected_ms = round(IDLE_CHUNKS * CHUNK_SEC * 1000)
-    ok = completed and abs(offset_ms - expected_ms) < 500
+    offset_ms = int(start_payload.get("offset_ms", -1))
+    end_ms = int(end_payload.get("end_ms", -1))
+    speech_ms = int(end_payload.get("speech_ms", 0))
+    vad_ms = int(end_payload.get("vad_duration_ms", 0))
+    expected_speech_ms = round(SPEECH_CHUNKS * CHUNK_SEC * 1000)
+
+    ok = (
+        end_payload
+        and end_ms >= offset_ms
+        and speech_ms >= expected_speech_ms - 100
+        and vad_ms >= expected_speech_ms - 100
+        and abs(speech_ms - vad_ms) <= 50
+    )
     print(
-        f"offset_ms={offset_ms} expected~={expected_ms} completed={completed} "
-        f"-> {'PASS' if ok else 'FAIL'}"
+        f"offset_ms={offset_ms} end_ms={end_ms} speech_ms={speech_ms} "
+        f"vad_ms={vad_ms} expected~={expected_speech_ms} -> {'PASS' if ok else 'FAIL'}"
     )
     return 0 if ok else 1
 
