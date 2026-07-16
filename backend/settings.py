@@ -23,7 +23,7 @@ class VadSettings:
     threshold: float = 0.9
     min_speech_ms: int = 500
     min_silence_ms: int = 1000
-    speech_pad_ms: int = 100
+    speech_pad_ms: int = 900
     neg_threshold: float | None = None
     max_speech_duration_s: float | None = None
 

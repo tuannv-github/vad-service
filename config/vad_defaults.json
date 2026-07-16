@@ -2,7 +2,7 @@
   "threshold": 0.9,
   "min_speech_ms": 500,
   "min_silence_ms": 1000,
-  "speech_pad_ms": 100,
+  "speech_pad_ms": 900,
   "neg_threshold": null,
   "max_speech_duration_s": null
 }

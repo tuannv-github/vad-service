@@ -101,7 +101,9 @@ class StreamVAD:
         for i in range(n_frames):
             chunk = audio_float[i * WINDOW_SAMPLES : (i + 1) * WINDOW_SAMPLES]
             tensor = torch.from_numpy(chunk).to(self.device)
-            result = self._iterator(tensor, return_seconds=True)
+            # time_resolution=3 keeps ms-level ends; default 1 rounds to 0.1s and
+            # can truncate the last syllable after speech_pad.
+            result = self._iterator(tensor, return_seconds=True, time_resolution=3)
             if self._iterator.last_speech_sample > 0:
                 self.last_voice_sec = self._iterator.last_speech_sample / TARGET_SAMPLE_RATE
             if result is None:
