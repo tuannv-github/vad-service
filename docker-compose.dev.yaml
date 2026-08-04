@@ -1,7 +1,12 @@
-# Dev overlay — use via ./dev.sh (auto-reload on backend/*.py changes).
+# Dev overlay — use via ./dev.sh (bind mounts + auto-reload on backend/*.py).
 services:
   vad:
     environment:
       VAD_RELOAD: "true"
       VAD_RELOAD_DELAY: "0.5"
       WATCHFILES_FORCE_POLLING: "true"
+    volumes:
+      - ./backend:/app/backend
+      - ./frontend:/app/frontend
+      - ./config:/app/config:ro
+      - ./data:/app/data

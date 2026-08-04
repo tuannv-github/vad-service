@@ -1,3 +1,5 @@
+# Deploy / image mode — code is baked into the image (./deploy.sh).
+# Dev with bind mounts + reload: ./dev.sh
 services:
   vad:
     build:
@@ -29,9 +31,7 @@ services:
       VAD_RELOAD_DELAY: ${VAD_RELOAD_DELAY:-0.5}
       WATCHFILES_FORCE_POLLING: ${WATCHFILES_FORCE_POLLING:-false}
     volumes:
-      - ./backend:/app/backend
-      - ./frontend:/app/frontend
-      - ./config:/app/config:ro
+      # Runtime data only — app code comes from the image.
       - ./data:/app/data
     restart: unless-stopped
     healthcheck:

@@ -10,7 +10,8 @@ Standalone Silero VAD microservice for continuous voice-activity detection. Stre
 git clone https://github.com/tuannv-github/vad-service.git
 cd vad-service
 cp .env.example .env          # optional
-docker compose up -d --build
+./deploy.sh                   # rebuild image and run from it
+# ./dev.sh                    # bind-mount source + reload on *.py
 ```
 
 - **GUI (client):** http://localhost:14120
@@ -299,16 +300,17 @@ On startup, defaults load from `vad_defaults.json`, then `vad_settings.json` is 
 
 The Parameters tab documents each Silero field. Edit `config/vad_defaults.json` to change what **Reset** restores.
 
-## Development
+## Deploy vs development
 
-`docker-compose.yaml` bind-mounts `./backend`, `./frontend`, `./config`, and `./data`. **Frontend** changes only need a browser refresh; **backend** `.py` changes need reload enabled.
+| Script | Behavior |
+|--------|----------|
+| `./deploy.sh` | Rebuild image; run baked code (no source mounts, `VAD_RELOAD=false`) |
+| `./dev.sh` | Bind-mount `backend`/`frontend`/`config`; watch `*.py` and reload |
+
+**Frontend** changes in dev only need a browser refresh; **backend** `.py` changes trigger reload.
 
 ```bash
-# Recommended: dev overlay sets VAD_RELOAD + polling
 ./dev.sh
-
-# Or enable in .env then:
-docker compose up --build
 
 # Local (no Docker; requires GPU + PyTorch)
 cd backend
@@ -331,6 +333,6 @@ python test_timeline_trim.py
 
 - Requires **NVIDIA GPU** + [Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
 - Silero JIT model is extracted at image build time to `/app/models/silero_vad.jit`.
-- `data/vad_settings.json` is tracked in git so active tuning is shared; Docker bind-mount still allows live GUI saves.
-- `config/vad_defaults.json` is mounted read-only; edit on the host to change reset defaults.
-- Dev bind mounts: `./backend`, `./frontend` — no image rebuild needed for code edits when reload is on.
+- `data/vad_settings.json` is tracked in git so active tuning is shared; `./data` is mounted in both deploy and dev so GUI saves persist.
+- Dev (`./dev.sh`): `config/vad_defaults.json` is mounted read-only; edit on the host to change reset defaults. Code mounts mean no image rebuild for edits when reload is on.
+- Deploy (`./deploy.sh`): app code comes from the image — rebuild to pick up changes.
