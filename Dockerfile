@@ -13,7 +13,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 RUN mkdir -p /app/models /app/data \
-    && pip download silero-vad -d /tmp/silero-wheels \
+    && pip download --no-deps silero-vad -d /tmp/silero-wheels \
     && python3 - <<'PY'
 import glob, pathlib, zipfile
 whl = glob.glob("/tmp/silero-wheels/silero_vad*.whl")[0]
