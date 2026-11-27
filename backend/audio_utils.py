@@ -59,8 +59,9 @@ def extract_pcm_segment(
     pcm_bytes: bytes, sample_rate: int, start_sec: float, end_sec: float
 ) -> bytes:
     """Slice int16 PCM by time range in seconds."""
-    start_byte = int(start_sec * sample_rate * 2)
-    end_byte = int(end_sec * sample_rate * 2)
+    # whole samples: an odd byte offset reads every int16 half-shifted (loud noise, STT makes up text)
+    start_byte = int(start_sec * sample_rate) * 2
+    end_byte = int(end_sec * sample_rate) * 2
     start_byte = max(0, min(start_byte, len(pcm_bytes)))
     end_byte = max(start_byte, min(end_byte, len(pcm_bytes)))
     return pcm_bytes[start_byte:end_byte]
