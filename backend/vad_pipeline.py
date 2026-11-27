@@ -82,7 +82,9 @@ class VadPipeline:
         self, session: VadSession, settings: VadSettings, chunk_duration: float
     ) -> None:
         if session.stream_vad is None:
-            session.stream_vad = self.vad.create_stream(settings)
+            if session.vad_model is None:
+                session.vad_model = self.vad.new_stream_model()
+            session.stream_vad = self.vad.create_stream(settings, model=session.vad_model)
             session.stream_timeline_base_sec = max(
                 0.0, session.buffer_duration - chunk_duration
             )

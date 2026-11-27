@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -140,10 +141,20 @@ class VADProcessor:
         self.model = None
         self._load_vad()
 
-    def create_stream(self, settings: VadSettings | None = None) -> StreamVAD:
+    def new_stream_model(self):
+        """A private copy of the model for one client. Silero keeps its recurrent state inside the
+        model object: one model shared by all streams mixes their audio (a second microphone
+        streaming changed the first one's speech probabilities and split its lines) and one stream's
+        reset wipes the others' state. ~2 MB each; made once per client, not per utterance."""
         if self.model is None:
             raise RuntimeError("Silero VAD model not loaded")
-        return StreamVAD(self.model, self.device, settings or get_settings())
+        return copy.deepcopy(self.model)
+
+    def create_stream(self, settings: VadSettings | None = None, model=None) -> StreamVAD:
+        if self.model is None:
+            raise RuntimeError("Silero VAD model not loaded")
+        return StreamVAD(model if model is not None else self.new_stream_model(), self.device,
+                         settings or get_settings())
 
     def detect_speech(
         self, audio_bytes: bytes, sample_rate: int = TARGET_SAMPLE_RATE, settings: VadSettings | None = None

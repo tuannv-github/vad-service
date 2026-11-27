@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from recordings import UtteranceRecording
 from request_stats import RequestTiming, new_request_timing
@@ -48,6 +48,7 @@ class VadSession:
     voice_burst_active: bool = False
     recordings: list[UtteranceRecording] = field(default_factory=list)
     stream_vad: StreamVAD | None = None
+    vad_model: Any = None          # this client's own Silero copy (state is inside the model)
     stream_timeline_base_sec: float = 0.0
     pending_speech_start_rel_sec: float | None = None
     last_end_at: float | None = None
@@ -110,3 +111,4 @@ class SessionManager:
     def invalidate_streams(self) -> None:
         for session in self._sessions.values():
             session.stream_vad = None
+            session.vad_model = None   # model reloaded or settings changed: copy again
