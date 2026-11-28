@@ -1,5 +1,7 @@
 ARG PYTORCH_IMAGE=nvcr.io/nvidia/pytorch:25.02-py3
 FROM ${PYTORCH_IMAGE}
+# Pinned (2026-11-27): unpinned builds got 6.3, a different model; ear/agent were tuned on 6.2.x.
+ARG SILERO_VAD_VERSION=6.2.1
 
 WORKDIR /app
 
@@ -13,7 +15,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 RUN mkdir -p /app/models /app/data \
-    && pip download --no-deps silero-vad -d /tmp/silero-wheels \
+    && pip download --no-deps "silero-vad==${SILERO_VAD_VERSION}" -d /tmp/silero-wheels \
     && python3 - <<'PY'
 import glob, pathlib, zipfile
 whl = glob.glob("/tmp/silero-wheels/silero_vad*.whl")[0]
